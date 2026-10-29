@@ -52,7 +52,7 @@ const S = {
   err: '', busy: false, invite: (params.get('g') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4), clear: []
 };
 let ON = null;
-const fx = { mask: {}, misses: {}, wrong: {} };
+const fx = { mask: {}, misses: {}, wrong: {}, score: {}, seen: {}, lastGuess: {}, chatSeen: 0 };
 let STATS = store.get('stats', { played: 0, won: 0, streak: 0, best: 0, dist: {}, last: null });
 
 // ---------- sound ----------
@@ -115,13 +115,16 @@ function avatarKeyOf(G, id) {
   if (G.kind === 'solo') return myAvatar();
   return AVATAR_KEYS[hash32(String(id)) % AVATAR_KEYS.length];
 }
-// Animal avatar on a soft tint; in teams mode the ring is the team colour.
+// 3D animal (Fluent Emoji, MIT) on a soft tint; in teams mode the ring is the team colour.
+function avatarImg(k) {
+  return '<img src="/avatars/' + k + '.png" alt="" draggable="false" decoding="async" onerror="this.replaceWith(\'' + avatarEmoji(k) + '\')">';
+}
 function avatarHTML(G, id, cls) {
   const idx = Math.max(0, G.order.indexOf(id));
   const online = G.kind === 'online' && ON && ON.online.has(id);
   const t = teamsOn(G) && G.teams && G.teams[id];
   const color = t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')';
-  return '<span class="av av-e' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarEmoji(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + '</span>';
+  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + '</span>';
 }
 function myNick() { return String(store.get('nick', '') || '').slice(0, 20); }
 function myAvatar() {
@@ -131,7 +134,7 @@ function myAvatar() {
 }
 function avatarPicker(selected, act, extra) {
   return '<div class="avpick" role="radiogroup" aria-label="Choose your avatar">' + AVATARS.map(([k, e]) =>
-    '<button type="button" class="avopt" role="radio" aria-checked="' + (k === selected) + '" aria-label="' + k + '" data-act="' + act + '" data-v="' + k + '"' + (extra || '') + '>' + e + '</button>').join('') + '</div>';
+    '<button type="button" class="avopt" role="radio" aria-checked="' + (k === selected) + '" aria-label="' + k + '" data-act="' + act + '" data-v="' + k + '"' + (extra || '') + '>' + avatarImg(k) + '</button>').join('') + '</div>';
 }
 // The word as this viewer may see it: the full word in solo and pass and play; online, blanks ("?") unless you picked it or the round is over.
 function displayWord(G) { return G.kind === 'online' ? (G.answer || G.mine || G.shown || '') : wordOf(G); }
@@ -196,8 +199,8 @@ function gameEffects(prev, G, me) {
     else { SND.play(setterSide ? 'win' : 'lose'); if (setterSide) confetti(80); }
   }
   if (prev.status !== 'done' && G.status === 'done' && G.kind !== 'solo') { SND.play('win'); confetti(140); }
-  if (me && G.status === 'playing' && G.settings.turns && G.turn === me && (prev.turn !== me || prev.status !== 'playing')) { toast('Your turn'); SND.play('tick'); }
-  if (me && G.status === 'setting' && isPicker(G, me) && !(prev.status === 'setting' && isPicker(prev, me))) { toast(teamsOn(G) ? 'Your team picks the word. Agree on one in team chat.' : 'Your turn to pick a word'); SND.play('tick'); }
+  if (me && G.status === 'playing' && G.settings.turns && G.turn === me && (prev.turn !== me || prev.status !== 'playing')) { spotlight(avatarKeyOf(G, me), 'Your turn!', 'Pick a letter or solve the word'); SND.play('tick'); }
+  if (me && G.status === 'setting' && isPicker(G, me) && !(prev.status === 'setting' && isPicker(prev, me))) { spotlight(avatarKeyOf(G, me), teamsOn(G) ? 'Your team gives the word' : 'You pick the word', teamsOn(G) ? 'Agree in team chat, then lock it in' : 'Choose a word and its category'); SND.play('tick'); }
 }
 
 // ---------- online ----------
@@ -407,6 +410,57 @@ function render() {
   restoreInputs(keep);
   const msgs = $('#msgs'); if (msgs) msgs.scrollTop = msgs.scrollHeight;
   renderModal();
+  postRender();
+}
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+let lastViewKey = '', enterTimer = 0;
+function viewKey() { const G = curG(); return S.view + ':' + (S.kind || '') + ':' + (G ? gameKeyBase(G) + G.status + ':' + G.round : ''); }
+// Animations that should play once per change, not on every re-render.
+function postRender() {
+  document.documentElement.style.setProperty('--bob', -(Date.now() % 2400) + 'ms');
+  const v = $('#view'), k = viewKey();
+  if (k !== lastViewKey) {
+    lastViewKey = k;
+    v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
+    clearTimeout(enterTimer); enterTimer = setTimeout(() => v.classList.remove('enter'), 900);
+  }
+  document.querySelectorAll('.vs-score[data-k]').forEach(el => {
+    const key = el.dataset.k, to = Number(el.dataset.to), from = fx.score[key];
+    fx.score[key] = to;
+    if (from == null || from === to) { el.textContent = to; return; }
+    if (to > from) el.closest('.vs-side').classList.add('bump');
+    if (reduceMotion()) { el.textContent = to; return; }
+    const t0 = performance.now();
+    const step = now => { const p = Math.min(1, (now - t0) / 700); el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+  const G = curG();
+  if (G && G.guessed) {
+    const gk = gameKeyBase(G) + G.round;
+    const last = G.guessed[G.guessed.length - 1] || '';
+    const sig = G.guessed.length + last + ':' + G.misses;
+    if (fx.lastGuess[gk] != null && fx.lastGuess[gk] !== sig && last) {
+      const key = document.querySelector('.key[data-k="' + last + '"]');
+      if (key) key.classList.add('just');
+      const prevMiss = Number(String(fx.lastGuess[gk]).split(':')[1]);
+      if (G.misses > prevMiss) { const f = $('.figure'); if (f) f.classList.add('hurt'); }
+    }
+    fx.lastGuess[gk] = sig;
+    const seen = fx.seen[gameKeyBase(G)] || (fx.seen[gameKeyBase(G)] = new Set(G.order));
+    document.querySelectorAll('.pl[data-id]').forEach(li => { if (!seen.has(li.dataset.id)) li.classList.add('pop'); });
+    G.order.forEach(id => seen.add(id));
+  }
+  if (ON && ON.chat.length) fx.chatSeen = Math.max(fx.chatSeen, ...ON.chat.map(m => m.t));
+}
+function spotlight(avatarKey, title, sub) {
+  if (reduceMotion()) { toast(title); return; }
+  document.querySelectorAll('.spot').forEach(n => n.remove());
+  const el = document.createElement('div');
+  el.className = 'spot'; el.setAttribute('role', 'status');
+  el.innerHTML = (avatarKey ? '<span class="spot-av">' + avatarImg(avatarKey) + '</span>' : '') + '<div><b>' + esc(title) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>';
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('out'), 1800);
+  setTimeout(() => el.remove(), 2300);
 }
 function renderTop() {
   const inGame = S.view !== 'home';
@@ -418,7 +472,7 @@ function renderTop() {
     '<button class="icon-btn" data-act="theme" aria-label="Switch between system, light and dark theme">' + ICON.theme + '</button>';
 }
 function tileRow(text, blank) {
-  return [...text].map((ch, i) => '<span class="t on' + (blank === i ? ' blank' : '') + '">' + (blank === i ? '' : esc(ch)) + '</span>').join('');
+  return [...text].map((ch, i) => '<span class="t on' + (blank === i ? ' blank' : '') + '" style="--i:' + i + '">' + (blank === i ? '' : esc(ch)) + '</span>').join('');
 }
 function renderHome() {
   const key = todayKey();
@@ -430,17 +484,19 @@ function renderHome() {
   const practice = store.get('practice', null);
   const local = store.get('local', null);
   const localResume = local && local.status !== 'done';
+  const art = (k, cls) => '<img class="mode-art' + (cls ? ' ' + cls : '') + '" src="/avatars/' + k + '.png" alt="" aria-hidden="true" draggable="false">';
   return '<section class="home">' +
     (S.invite ? renderInvite() : '') +
     '<div class="hero">' +
+      '<div class="floaters" aria-hidden="true">' + ['fox', 'panda', 'unicorn', 'frog', 'owl', 'tiger'].map((k, i) => '<img class="fl f' + i + '" src="/avatars/' + k + '.png" alt="" draggable="false">').join('') + '</div>' +
       '<h1 class="logo" aria-label="Hangtime">' + tileRow('HANGTIME', 4) + '</h1>' +
       '<p class="lede">Guess the word one letter at a time before the drawing is finished. Play today’s word, practise, or start a game and send your friends the link.</p>' +
     '</div>' +
     '<div class="modes">' +
-      '<button class="mode" data-act="daily"><span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
-      '<button class="mode" data-act="practice"><span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
-      '<button class="mode mode-vs" data-act="create-teams"><span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
-      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '"><span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
+      '<button class="mode" data-act="daily">' + art('owl') + '<span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
+      '<button class="mode" data-act="practice">' + art('fox') + '<span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
+      '<button class="mode mode-vs" data-act="create-teams">' + art('tiger', 'art-b') + art('lion') + '<span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
+      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '">' + art('panda') + '<span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
     '</div>' +
     '<div class="chips" role="group" aria-label="Practice category"><span class="eyebrow" style="margin-right:4px">Practice words</span>' +
       [['any', 'Mixed']].concat(CAT_KEYS.map(c => [c, CATS[c].label])).map(([v, l]) => '<button class="chip" data-act="pcat" data-v="' + v + '" aria-pressed="' + (S.practiceCat === v) + '">' + esc(l) + '</button>').join('') +
@@ -491,7 +547,7 @@ function renderSetup() {
   return '<section class="setup"><div class="panel">' +
     '<h2>Pass and play</h2><p class="muted" style="margin:0 0 14px">One device, 2 to 6 players. Each round one player picks a word while the others look away, then the rest take turns guessing. Tap an avatar to change it.</p>' +
     '<div class="names">' + n.map((v, i) =>
-      '<div class="row"><button type="button" class="av av-e av-btn" style="--avc:' + (S.setup.settings.mode === 'teams' ? TEAM[localTeam(i)].color : 'var(--p' + (i + 1) + ')') + '" data-act="lavatar" data-i="' + i + '" aria-label="Change player ' + (i + 1) + '\u2019s avatar">' + avatarEmoji(localAvatar(i)) + '</button><input id="pn-' + i + '" class="field" maxlength="16" value="' + esc(v) + '" placeholder="Player ' + (i + 1) + '" aria-label="Player ' + (i + 1) + ' name" data-input="pname" data-i="' + i + '">' +
+      '<div class="row"><button type="button" class="av av3d av-btn" style="--avc:' + (S.setup.settings.mode === 'teams' ? TEAM[localTeam(i)].color : 'var(--p' + (i + 1) + ')') + '" data-act="lavatar" data-i="' + i + '" aria-label="Change player ' + (i + 1) + '\u2019s avatar">' + avatarImg(localAvatar(i)) + '</button><input id="pn-' + i + '" class="field" maxlength="16" value="' + esc(v) + '" placeholder="Player ' + (i + 1) + '" aria-label="Player ' + (i + 1) + ' name" data-input="pname" data-i="' + i + '">' +
       (S.setup.settings.mode === 'teams' ? '<button class="team-chip t-' + localTeam(i) + '" data-act="lteam" data-i="' + i + '" aria-label="Player ' + (i + 1) + ' is on the ' + teamName(localTeam(i)) + '. Switch team">' + TEAM[localTeam(i)].name + '</button>' : '') +
       (n.length > 2 ? '<button class="icon-btn" data-act="pdel" data-i="' + i + '" aria-label="Remove player ' + (i + 1) + '">' + ICON.close + '</button>' : '') + '</div>').join('') + '</div>' +
     (n.length < 6 ? '<div style="margin-top:10px"><button class="btn" data-act="padd">Add a player</button></div>' : '') +
@@ -533,6 +589,7 @@ function livesHTML(G) {
   for (let i = 0; i < max; i++) d += '<span class="life' + (i >= left ? ' gone' : '') + '"></span>';
   return '<div class="lives" role="img" aria-label="' + left + ' of ' + max + ' lives left">' + d + '<span class="lives-n">' + left + ' ' + plural(left, 'life', 'lives') + ' left</span></div>';
 }
+function gameKeyBase(G) { return G.kind + ':' + (G.code || '') + ':' + G.createdAt + ':'; }
 function gameKey(G) { return G.kind + ':' + (G.code || G.daily || '') + ':' + G.round + ':' + G.createdAt; }
 // "?" marks a letter the server keeps hidden from this viewer.
 const isSlot = ch => isLetter(ch) || ch === '?';
@@ -556,7 +613,7 @@ function tilesHTML(G, word, key, opts) {
       else if (opts.mine) cls.push('mine');
       if (pop) cls.push('pop');
       const content = shown || ((opts.reveal || opts.mine) && ch !== '?') ? esc(ch) : '';
-      html += '<span class="' + cls.join(' ') + '" style="--n:' + longest + (pop ? ';animation-delay:' + (Math.min(i, 10) * 40) + 'ms' : '') + '">' + content + '</span>';
+      html += '<span class="' + cls.join(' ') + '" style="--i:' + i + ';--n:' + longest + (pop ? ';animation-delay:' + (Math.min(i, 10) * 40) + 'ms' : '') + '">' + content + '</span>';
       i++;
     }
     html += '</span>';
@@ -584,15 +641,15 @@ function boardShell(o) {
   const prevWrong = fx.wrong[o.key];
   fx.wrong[o.key] = G.wrongWords.length;
   const shake = prevWrong != null && G.wrongWords.length > prevWrong;
-  const t = o.word ? tilesHTML(G, o.word, o.key, { reveal: ended, mine: o.mine }) : null;
   const won = ended && G.result === 'solved', lost = ended && G.result === 'hanged';
+  const t = o.word ? tilesHTML(G, o.word, o.key, { reveal: ended, mine: o.mine }) : null;
   return '<section class="board' + (o.rail ? ' has-rail' : '') + '"><div class="play">' +
     '<div class="roundline">' + o.eyebrow + '</div>' +
     (teamsOn(G) && G.pickTeam ? vsBanner(G) : '') +
     '<div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureSVG(G, o.key) + '</div></div>' +
     livesHTML(G) +
     (o.clue ? '<div class="clue">' + o.clue + '</div>' : '') +
-    (t ? '<div class="tiles' + (shake ? ' shake' : '') + '" role="img" aria-label="' + esc(t.aria) + '">' + t.html + '</div>' : '') +
+    (t ? '<div class="tiles' + (shake ? ' shake' : '') + (won ? ' win' : '') + '" role="img" aria-label="' + esc(t.aria) + '">' + t.html + '</div>' : '') +
     '<div class="status" aria-live="polite">' + (o.status || '') + '</div>' +
     (G.wrongWords.length ? '<div class="tried">Wrong answers: ' + G.wrongWords.map(w => '<s>' + esc(w) + '</s>').join(' ') + '</div>' : '') +
     (o.below || '') +
@@ -651,7 +708,7 @@ function playersHTML(G, lobby, list) {
     if (turn) tags.push('Guessing now');
     if (off) tags.push('Away');
     const isMe = G.kind === 'online' && id === ME.id;
-    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '">' + avatarHTML(G, id) +
+    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '" data-id="' + esc(id) + '">' + avatarHTML(G, id, turn ? 'bob' : '') +
       '<div class="who"><div class="nm">' + esc(nameOf(G, id)) + (isMe ? '<span class="you">you</span>' : '') + '</div>' + (tags.length ? '<div class="tag">' + tags.join(' · ') + '</div>' : '') + '</div>' +
       (lobby ? '' : '<div class="sc">' + (G.scores[id] || 0) + '</div>') + '</li>';
   }).join('') + '</ul>';
@@ -681,7 +738,7 @@ function vsBanner(G, compact) {
     return '<div class="vs-side t-' + t + (live && G.pickTeam === t ? ' giving' : '') + (live && G.pickTeam !== t ? ' guessing' : '') + '">' +
       '<div class="vs-head"><span class="vs-name">' + TEAM[t].name + '</span>' + (role ? '<span class="vs-role">' + role + '</span>' : '') + '</div>' +
       '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id)).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
-      '<b class="vs-score">' + (ts[t] || 0) + '</b></div></div>';
+      '<b class="vs-score" data-k="' + esc(gameKeyBase(G) + t) + '" data-to="' + (ts[t] || 0) + '">' + (fx.score[gameKeyBase(G) + t] != null ? fx.score[gameKeyBase(G) + t] : (ts[t] || 0)) + '</b></div></div>';
   };
   return '<div class="vs' + (compact ? ' compact' : '') + '" role="group" aria-label="Red ' + (ts.a || 0) + ', Blue ' + (ts.b || 0) + '">' + side('a') + '<div class="vs-mid" aria-hidden="true">VS</div>' + side('b') + '</div>';
 }
@@ -691,7 +748,7 @@ function chatHTML(G) {
   const title = myTeam ? TEAM[myTeam].name + ' team chat' : 'Chat';
   const sub = myTeam ? 'Only your team sees this' : 'Everyone in the game sees this';
   const empty = myTeam && G.status === 'setting' && isPicker(G, ME.id) ? 'Pitch a word to your team.' : myTeam && G.status === 'setting' ? 'Plan your guessing order while they choose.' : 'No messages yet.';
-  const msgs = ON.chat.slice(-40).map(m => '<li class="' + (m.id === ME.id ? 'me' : '') + '"><b>' + esc(m.id === ME.id ? 'You' : nameOf(G, m.id)) + '</b><span>' + esc(m.text) + '</span></li>').join('');
+  const msgs = ON.chat.slice(-40).map(m => '<li class="' + (m.id === ME.id ? 'me' : '') + (m.t > fx.chatSeen ? ' new' : '') + '">' + avatarHTML(G, m.id, 'sm') + '<div><b>' + esc(m.id === ME.id ? 'You' : nameOf(G, m.id)) + '</b><span>' + esc(m.text) + '</span></div></li>').join('');
   return '<div class="card chat' + (myTeam ? ' t-' + myTeam : '') + '"><div class="card-h"><span class="eyebrow">' + (myTeam ? '<span class="team-dot"></span>' : '') + esc(title) + '</span><span class="muted small">' + sub + '</span></div>' +
     '<ul class="msgs" id="msgs" aria-live="polite">' + (msgs || '<li class="muted small">' + empty + '</li>') + '</ul>' +
     '<form class="chatform" data-form="chat"><input id="chat-input" class="field" maxlength="200" autocomplete="off" placeholder="Message your ' + (myTeam ? 'team' : 'friends') + '" aria-label="Chat message"><button class="btn" type="submit">Send</button></form></div>';
@@ -720,8 +777,9 @@ function roundResult(G, word) {
     const nextSetter = !last && G.settings.source === 'friends' && G.order.length >= 2 ? G.order[G.round % G.order.length] : null;
     if (nextSetter) next = (G.kind === 'online' && nextSetter === ME.id ? 'You pick' : esc(nameOf(G, nextSetter)) + ' picks') + ' the next word.';
   }
-  return '<div class="result"><div class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + '</div><h2>' + title + '</h2>' +
-    '<p class="muted">The word was <b style="color:var(--ink)">' + esc(word) + '</b></p>' +
+  const hero = solved && G.solver ? avatarHTML(G, G.solver, 'xl celebrate') : (teams ? membersOf(G, G.pickTeam).slice(0, 3).map(id => avatarHTML(G, id, 'lg celebrate')).join('') : G.setter ? avatarHTML(G, G.setter, 'xl celebrate') : '');
+  return '<div class="result">' + (hero ? '<div class="result-av">' + hero + '</div>' : '') + '<div class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + '</div><h2>' + title + '</h2>' +
+    '<p class="muted">The word was <b style="color:var(--ink)">' + esc(word) + '</b>' + (G.category ? ' <span class="muted">(' + esc(catLabel(G.category)) + ')</span>' : '') + '</p>' +
     (deltas ? '<div class="deltas">' + deltas + '</div>' : '') +
     '<button class="btn primary big" data-act="next">' + (last ? 'See final scores' : 'Next round') + '</button>' +
     (next ? '<p class="muted small">' + next + '</p>' : '') +
@@ -740,7 +798,8 @@ function renderFinal(G) {
     title = !ids.length ? 'Game over' : winners.length > 1 ? 'A tie between ' + winners.map(id => esc(nameOf(G, id))).join(' and ') : esc(nameOf(G, winners[0])) + ' wins';
   }
   const canAgain = G.kind === 'local' || (G.kind === 'online' && G.host === ME.id);
-  return '<section class="final"><div class="eyebrow">Final scores · ' + G.totalRounds + ' ' + plural(G.totalRounds, 'round', 'rounds') + '</div><h1>' + title + '</h1>' + teamBlock +
+  const podium = ids.length >= 2 ? '<div class="podium">' + [1, 0, 2].filter(i => ids[i]).map(i => '<div class="pod p' + (i + 1) + '">' + (i === 0 ? '<img class="crown" src="/avatars/crown.png" alt="" aria-hidden="true">' : '') + avatarHTML(G, ids[i], i === 0 ? 'xl' : 'lg') + '<b>' + esc(nameOf(G, ids[i])) + '</b><span>' + (G.scores[ids[i]] || 0) + '</span><div class="pod-block">' + (i + 1) + '</div></div>').join('') + '</div>' : '';
+  return '<section class="final"><div class="eyebrow">Final scores · ' + G.totalRounds + ' ' + plural(G.totalRounds, 'round', 'rounds') + '</div><h1>' + title + '</h1>' + teamBlock + podium +
     '<ol class="standings">' + ids.map((id, i) => '<li class="' + (!teamsOn(G) && (G.scores[id] || 0) === top ? 'first' : '') + '"><span class="rank">' + (i + 1) + '</span>' + avatarHTML(G, id) + '<span class="nm">' + esc(nameOf(G, id)) + (teamsOn(G) && G.teams[id] ? ' <span class="muted small">' + TEAM[G.teams[id]].name + '</span>' : '') + '</span><span class="sc">' + (G.scores[id] || 0) + '</span></li>').join('') + '</ol>' +
     (G.history.length ? '<ul class="history">' + G.history.map(h => '<li>Round ' + h.round + ' · <b>' + esc(h.word) + '</b>' + (h.pickTeam && teamsOn(G) ? ' from the ' + teamName(h.pickTeam) : h.setter ? ' by ' + esc(nameOf(G, h.setter)) : '') + ' · ' + (h.result === 'solved' ? 'solved by ' + esc(nameOf(G, h.solver)) : 'nobody solved it') + '</li>').join('') + '</ul>' : '') +
     '<div class="row" style="justify-content:center">' + (canAgain ? '<button class="btn primary big" data-act="again">Play again</button>' : (G.kind === 'online' ? '<p class="muted">Waiting for ' + esc(nameOf(G, G.host)) + ' to start a new game<span class="dots"></span></p>' : '')) +

@@ -6,7 +6,8 @@ Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
 - **Practice**: endless words from eight categories, with streaks and stats.
 - **Pass and play**: 2 to 6 players on one device take turns picking words for each other.
 - **Online rooms**: create a game, send the link, and play live. You get turns, scores, reactions, nudges and a chat.
-- **Teams**: Red and Blue. One team agrees on a word in its private team chat, the other team guesses, then they swap.
+- **Team battle (Red vs Blue)**: one team agrees on a word and its category in its private team chat, the other team guesses, then they swap. A live VS scoreboard tracks the score, and the game ends on a podium.
+- **3D avatars and animation**: every player picks a 3D animal avatar. Big moments get animations: a spotlight when it's your turn, counting scores, a wave across the tiles when the word is solved, and a crown for the winner. Motion is reduced when the device asks for it.
 
 ## How it works
 
@@ -26,3 +27,7 @@ node test/dev-server.js   # http://localhost:4321, with an in-memory Redis
 ## Deploy
 
 The repo is connected to Vercel, so pushing to `main` deploys to production. Online play needs Upstash Redis from the Vercel Marketplace (`vercel integration add upstash/upstash-kv`). The function reads `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+
+## Credits
+
+The 3D avatars are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/`, resized to 160 px, and pinned to commit `1ffb34c`.
