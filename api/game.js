@@ -7,7 +7,7 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_
 const TTL = 24 * 3600;
 const MAX_PLAYERS = 12;
 const ONLINE_MS = 25000;
-const REACTS = ['👏', '😂', '😱', '🔥', '🤔', '💀'];
+const REACTS = ['clap', 'laugh', 'shock', 'fire', 'think', 'party', 'heart'];
 const MOVES = ['guess', 'solve', 'setword', 'skip', 'next', 'start', 'again', 'settings', 'team', 'shuffle'];
 const CHAT_KEEP = 60;
 // Writes the game only if nobody else wrote it since we read it, so simultaneous guesses never overwrite each other.

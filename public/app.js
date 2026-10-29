@@ -15,8 +15,10 @@ const store = {
 const catLabel = c => (CATS[c] && CATS[c].label) || (c ? String(c) : 'Mixed');
 const CAT_SUGGEST = ['Movie', 'Animal', 'Food', 'Place', 'Sport', 'Person', 'Thing', 'Song', 'Brand', 'Game'];
 const initials = n => (String(n || '?').trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2) || '?');
-const REACTS = ['👏', '😂', '😱', '🔥', '🤔', '💀'];
-const REACT_NAMES = { '👏': 'applause', '😂': 'laughing', '😱': 'shock', '🔥': 'fire', '🤔': 'thinking', '💀': 'skull' };
+// 3D reactions (Fluent Emoji, MIT) in public/reactions
+const REACTS = ['clap', 'laugh', 'shock', 'fire', 'think', 'party', 'heart'];
+const REACT_NAMES = { clap: 'applause', laugh: 'laughing', shock: 'shock', fire: 'fire', think: 'thinking', party: 'party', heart: 'love' };
+const reactImg = k => '<img src="/reactions/' + k + '.png" alt="" draggable="false">';
 const API = '/api/game';
 const TEAM = { a: { name: 'Red', color: 'var(--p2)' }, b: { name: 'Blue', color: 'var(--p1)' } };
 const teamName = t => (TEAM[t] ? TEAM[t].name : '') + ' team';
@@ -183,7 +185,8 @@ function floatEmoji(e) {
   if (!REACTS.includes(e)) return;
   if (document.querySelectorAll('.floaty').length > 14) return;
   const el = document.createElement('span');
-  el.className = 'floaty'; el.textContent = e; el.style.left = (12 + Math.random() * 76) + '%';
+  el.className = 'floaty'; el.innerHTML = reactImg(e); el.style.left = (12 + Math.random() * 76) + '%';
+  el.style.setProperty('--sway', (Math.random() * 60 - 30).toFixed(0) + 'px');
   document.body.appendChild(el); setTimeout(() => el.remove(), 2400);
 }
 function gameEffects(prev, G, me) {
@@ -759,7 +762,7 @@ function railHTML(G) {
   const reacts = G.kind === 'online';
   return chatHTML(G) +
     '<div class="card"><div class="card-h"><span class="eyebrow">' + (teamsOn(G) ? 'Players' : 'Scores') + '</span></div>' + playersHTML(G) + '</div>' +
-    (reacts ? '<div class="card"><span class="eyebrow">React</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '" aria-label="Send ' + REACT_NAMES[e] + '">' + e + '</button>').join('') + '</div></div>' : '') +
+    (reacts ? '<div class="card"><span class="eyebrow">React</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '" aria-label="Send ' + REACT_NAMES[e] + '" title="' + REACT_NAMES[e] + '">' + reactImg(e) + '</button>').join('') + '</div></div>' : '') +
     '<div class="card"><div class="card-h"><span class="eyebrow">Activity</span></div>' + (items.length ? '<ul class="feed">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '<p class="muted small" style="margin:0">Moves show up here.</p>') + '</div>';
 }
 function roundResult(G, word) {

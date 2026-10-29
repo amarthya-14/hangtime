@@ -486,6 +486,36 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .pts{font-weight:700;color:var(--hit)}
 .rules{margin:14px 0 0;padding:10px 14px;border-radius:12px;background:var(--sunk);border:1px solid var(--line);font-size:13.5px;color:var(--muted)}
 
+/* free-standing 3D avatars: no circle, a soft coloured shadow underneath */
+.av3d{background:none;box-shadow:none;border-radius:0;overflow:visible;isolation:isolate}
+.av3d::before{content:"";position:absolute;left:8%;right:8%;bottom:-8%;height:22%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--avc) 60%,transparent),transparent);z-index:-1}
+.av3d img{width:118%;height:118%;margin:-14% -9% -4%;filter:drop-shadow(0 3px 3px rgba(0,0,0,.22))}
+.pl.turn .av3d{box-shadow:none}
+.pl.turn .av3d::before{background:radial-gradient(closest-side,var(--turn),transparent)}
+.pl .av3d{width:36px;height:36px}
+.vs-avs .av3d{border:0;width:40px;height:40px;margin-right:-2px}
+.vs-side.t-b .vs-avs .av3d{margin-right:0;margin-left:-2px}
+.result-av .av3d{border:0}
+.av-btn.av3d{background:none;box-shadow:none;width:44px;height:44px}
+.av-btn.av3d:hover img{transform:translateY(-2px) rotate(-6deg)}
+.avopt{background:none;border:0;box-shadow:none;width:52px;height:56px;position:relative;isolation:isolate;border-radius:14px}
+.avopt::before{content:"";position:absolute;left:10%;right:10%;bottom:2px;height:12px;border-radius:50%;background:radial-gradient(closest-side,var(--edge),transparent);z-index:-1;transition:background .2s,transform .2s}
+.avopt img{width:46px;height:46px;filter:drop-shadow(0 3px 3px rgba(0,0,0,.2))}
+.avopt:hover{background:color-mix(in srgb,var(--sunk) 70%,transparent)}
+.avopt[aria-checked="true"]{background:none;box-shadow:none;border:0}
+.avopt[aria-checked="true"]::before{background:radial-gradient(closest-side,var(--turn),transparent);transform:scaleX(1.25)}
+.avopt[aria-checked="true"] img{transform:translateY(-4px) scale(1.12)}
+.avopt:active{transform:none;box-shadow:none}
+.spot-av img{width:92px;height:92px}
+
+/* 3D reactions */
+.react{width:46px;height:46px;padding:0;display:grid;place-items:center;border-radius:14px}
+.react img{width:32px;height:32px;transition:transform .25s var(--spring);pointer-events:none}
+.react:hover img{transform:translateY(-3px) scale(1.18) rotate(-6deg)}
+.floaty{font-size:0;animation:floatup3d 2.6s cubic-bezier(.2,.7,.3,1) forwards}
+.floaty img{width:64px;height:64px;filter:drop-shadow(0 8px 10px rgba(0,0,0,.25))}
+@keyframes floatup3d{0%{transform:translate(0,0) scale(.3) rotate(-15deg);opacity:0}12%{opacity:1;transform:translate(0,-40px) scale(1.15) rotate(8deg)}55%{transform:translate(var(--sway,0),-34vh) scale(1) rotate(-6deg)}100%{transform:translate(calc(var(--sway,0) * -1),-62vh) scale(.9) rotate(4deg);opacity:0}}
+
 /* modal, toast */
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:20px;z-index:40;animation:fade .15s ease}
 @keyframes fade{from{opacity:0}}

@@ -31,4 +31,4 @@ The repo is connected to Vercel, so pushing to `main` deploys to production. Onl
 
 ## Credits
 
-The 3D avatars are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/`, resized to 160 px, and pinned to commit `1ffb34c`.
+The 3D avatars and reactions are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/` and `public/reactions/`, resized to 160 px, and pinned to commit `1ffb34c`.
