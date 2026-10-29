@@ -4,6 +4,8 @@ Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
 
 - **Daily word**: the same word for everyone each day, with a shareable result grid.
 - **Practice**: endless words from eight kid-friendly categories, with streaks and stats.
+- **Optional timer**: 60 seconds to guess and 60 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn. The server keeps the clock.
+- **3D hangman**: a blocky wooden gallows that grows one piece per wrong guess, with the guesser's own avatar standing on a crate. Run out of lives and the crate tips over; solve it and they jump for joy.
 - **Fair scoring**: every word is worth the same, short or long. Uncovered letters share 60 points, finishing the word earns 40 more plus 5 per life left, and a word nobody solves earns 50 for whoever gave it. The turn passes after every guess.
 - **Pass and play**: 2 to 6 players on one device take turns picking words for each other.
 - **Online rooms**: create a game, send the link, and play live. You get turns, scores, reactions, nudges and a chat.
@@ -31,7 +33,7 @@ The repo is connected to Vercel, so pushing to `main` deploys to production. Onl
 
 ## Credits
 
-The full-body avatars are rendered from [Mini Characters](https://kenney.nl/assets/mini-characters-1) by Kenney (CC0); `public/avatars/` holds a standing and a jumping pose for each character.
+The full-body avatars are rendered from [Mini Characters](https://kenney.nl/assets/mini-characters-1) by Kenney (CC0); `public/avatars/` holds a standing, a jumping and a fallen pose for each character. The gallows scenes in `public/hangman/` were modelled and rendered for this project in three.js.
 
 
 The 3D reaction icons and the crown are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/` and `public/reactions/`, resized to 160 px, and pinned to commit `1ffb34c`.

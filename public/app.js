@@ -263,6 +263,32 @@ function openOnline(code, game) {
   render(); window.scrollTo(0, 0);
   poll();
 }
+// Server time, so every player's countdown agrees.
+function serverNow() { return Date.now() + (S.view === 'online' && ON && ON.skew ? ON.skew : 0); }
+const timeoutSent = {};
+function tickTimers() {
+  const els = document.querySelectorAll('.timer[data-deadline]');
+  if (!els.length) return;
+  const G = curG();
+  els.forEach(el => {
+    const dl = Number(el.dataset.deadline);
+    const left = dl - serverNow(), secs = Math.max(0, Math.ceil(left / 1000));
+    const b = el.querySelector('b');
+    if (b && b.textContent !== String(secs)) {
+      b.textContent = secs;
+      const mine = G && ((G.status === 'playing' && G.turn && (G.turn === ME.id || S.view !== 'online')) || (G.status === 'setting' && (S.view !== 'online' || isPicker(G, ME.id))));
+      if (secs > 0 && secs <= 5 && mine) SND.play('tick');
+    }
+    const total = ((G && G.settings.timer) || 60) * 1000;
+    el.style.setProperty('--p', Math.max(0, Math.min(1, left / total)));
+    el.classList.toggle('low', secs <= 10);
+    if (left <= 0 && G && G.deadline === dl) {
+      const last = timeoutSent[dl] || 0;
+      if (Date.now() - last > 1500) { timeoutSent[dl] = Date.now(); dispatch({ t: 'timeout', deadline: dl }); }
+    }
+  });
+}
+setInterval(tickTimers, 250);
 function closeOnline() { if (!ON) return; clearTimeout(ON.timer); ON = null; }
 function schedulePoll() { if (!ON) return; clearTimeout(ON.timer); ON.timer = setTimeout(poll, document.hidden ? 5000 : 1200); }
 async function poll() {
@@ -278,6 +304,7 @@ async function poll() {
     ON.failures = 0;
     let changed = false;
     if (hb) { ON.lastHb = Date.now(); if (j.online) { ON.online = new Set(j.online); changed = true; } }
+    if (j.now) ON.skew = j.now - Date.now();
     if (j.game) { applyGame(j.game); changed = true; }
     if (j.channel && j.channel !== ON.ch) { ON.ch = j.channel; ON.ct = 0; ON.chat = []; changed = true; setTimeout(poll, 0); }
     else if (j.chat && j.chat.length) {
@@ -547,6 +574,7 @@ function settingsHTML(act, s, enabled, local) {
     (s.source === 'random' ? '<div class="setting"><span class="lbl">Category</span>' + seg(act, 'category', s.category, cats, enabled) + '</div>' : '') +
     (local ? '' : '<div class="setting"><span class="lbl">Guessing</span>' + seg(act, 'turns', s.turns, [[true, 'One at a time'], [false, 'Everyone at once']], enabled) + '</div>') +
     '<div class="setting"><span class="lbl">Lives per word</span>' + seg(act, 'maxMisses', s.maxMisses, [[6, '6 classic'], [8, '8'], [10, '10 relaxed']], enabled) + '</div>' +
+    '<div class="setting"><span class="lbl">Timer</span>' + seg(act, 'timer', s.timer || 0, [[0, 'Off'], [60, '60 seconds to guess or give a word']], enabled) + '</div>' +
     '<div class="setting"><span class="lbl">Rounds</span>' + seg(act, 'rounds', s.rounds, [[0, teams ? '4' : s.source === 'friends' ? 'One each' : '5'], [3, '3'], [5, '5'], [8, '8']].filter((x, i) => !(i === 2 && (teams || s.source !== 'friends'))), enabled) + '</div>' +
   '</div>';
 }
@@ -568,70 +596,32 @@ function renderSetup() {
   '</div></section>';
 }
 function partsFor(m, max) { return Math.min(6, Math.ceil(m * 6 / Math.max(1, max))); }
-// A colourful 3D-style hangman: wooden gallows and a cartoon kid drawn part by part.
-const FIG_PARTS = [
-  // head with hair; the face is drawn separately so it can react
-  '<g class="fp"><circle cx="140" cy="66" r="17" fill="url(#hg-skin)" stroke="#7a4a2a" stroke-opacity=".35" stroke-width="1.5"/><path d="M123 62c1-12 9-18 18-18s17 6 17 17c-5-6-11-8-17-6-6-3-13 0-18 7z" fill="url(#hg-hair)"/></g>',
-  // body: a T-shirt
-  '<g class="fp"><path d="M126 86h28c4 0 6 3 6 7v26c0 5-3 8-8 8h-24c-5 0-8-3-8-8V93c0-4 2-7 6-7z" fill="url(#hg-shirt)"/><path d="M134 86c2 4 10 4 12 0" stroke="#000" stroke-opacity=".18" stroke-width="2" fill="none"/></g>',
-  '<g class="fp"><path d="M127 92 L112 116" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M127 92 L121 102" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
-  '<g class="fp"><path d="M153 92 L168 116" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M153 92 L159 102" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
-  '<g class="fp"><path d="M134 126 L129 160" stroke="url(#hg-pants)" stroke-width="10" stroke-linecap="round"/><ellipse cx="126" cy="164" rx="8" ry="4.5" fill="#2b2f3a"/></g>',
-  '<g class="fp"><path d="M146 126 L151 160" stroke="url(#hg-pants)" stroke-width="10" stroke-linecap="round"/><ellipse cx="154" cy="164" rx="8" ry="4.5" fill="#2b2f3a"/></g>'
-];
-// Arms up for the rescue pose
-const FIG_WIN_ARMS = [
-  '<g class="fp"><path d="M127 92 L113 68" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M127 92 L122 82" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
-  '<g class="fp"><path d="M153 92 L167 68" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M153 92 L158 82" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>'
-];
-const HG_DEFS = '<defs>' +
-  '<linearGradient id="hg-wood-v" x1="0" x2="1"><stop offset="0" stop-color="#b9783f"/><stop offset=".45" stop-color="#d89a5c"/><stop offset="1" stop-color="#8f5a2c"/></linearGradient>' +
-  '<linearGradient id="hg-wood-h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dba066"/><stop offset="1" stop-color="#9a6131"/></linearGradient>' +
-  '<linearGradient id="hg-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd46f"/><stop offset="1" stop-color="#4f9b46"/></linearGradient>' +
-  '<radialGradient id="hg-skin" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ffe2c4"/><stop offset="1" stop-color="#f0ad7e"/></radialGradient>' +
-  '<linearGradient id="hg-skin-l"><stop offset="0" stop-color="#ffd8b3"/><stop offset="1" stop-color="#eba174"/></linearGradient>' +
-  '<linearGradient id="hg-hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4226"/><stop offset="1" stop-color="#3f2414"/></linearGradient>' +
-  '<linearGradient id="hg-shirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--fig-shirt-1)"/><stop offset="1" style="stop-color:var(--fig-shirt-2)"/></linearGradient>' +
-  '<linearGradient id="hg-pants" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a6fb0"/><stop offset="1" stop-color="#2f4d82"/></linearGradient>' +
-  '<filter id="hg-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-opacity=".25"/></filter>' +
-  '</defs>';
-function faceSVG(G, won, lost) {
-  if (lost) return '<g class="hg-face"><path d="M131 62l5 5M136 62l-5 5M144 62l5 5M149 62l-5 5" stroke="#3a2416" stroke-width="2.4" stroke-linecap="round"/><path d="M134 76q6-4 12 0" stroke="#3a2416" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>';
-  const eyes = '<circle cx="134" cy="65" r="2.6" fill="#3a2416"/><circle cx="146" cy="65" r="2.6" fill="#3a2416"/><circle cx="135" cy="64" r=".9" fill="#fff"/><circle cx="147" cy="64" r=".9" fill="#fff"/>';
-  const cheeks = '<circle cx="129" cy="71" r="3" fill="#ff8a80" opacity=".45"/><circle cx="151" cy="71" r="3" fill="#ff8a80" opacity=".45"/>';
-  if (won) return '<g class="hg-face">' + eyes + cheeks + '<path d="M132 72q8 9 16 0z" fill="#7a2e1f"/></g>';
-  const worried = G.misses >= Math.ceil(G.settings.maxMisses * 0.66);
-  const mouth = worried ? '<ellipse cx="140" cy="75" rx="3.4" ry="4" fill="#7a2e1f"/>' : '<path d="M134 73q6 5 12 0" stroke="#7a2e1f" stroke-width="2.4" fill="none" stroke-linecap="round"/>';
-  const sweat = worried ? '<path class="sweat" d="M158 56q3 5 0 7q-3-2 0-7z" fill="#7cc8ff"/>' : '';
-  return '<g class="hg-face">' + eyes + cheeks + mouth + sweat + '</g>';
+// The hangman scene is rendered in 3D (public/hangman): each wrong guess adds a piece of the gallows,
+// while the guesser's own avatar stands on the crate. Out of lives: the crate tips and they tumble off.
+const HANG_STAGES = ['0', '1', '2', '3', '4', '5', 'lost'];
+HANG_STAGES.forEach(st => { const im = new Image(); im.src = '/hangman/stage-' + st + '.png'; });
+function heroOf(G) {
+  if (G.kind === 'solo') return 'me';
+  if (G.status === 'over' || G.status === 'done') return G.solver || guessersOf(G)[0] || G.order[0];
+  return G.turn || guessersOf(G)[0] || G.order[0];
 }
-function figureSVG(G, key) {
-  const max = G.settings.maxMisses;
+function figureHTML(G, key) {
   const ended = G.status === 'over' || G.status === 'done';
   const won = ended && G.result === 'solved', lost = ended && G.result === 'hanged';
-  const shown = won ? 6 : partsFor(G.misses, max);
+  const shown = partsFor(G.misses, G.settings.maxMisses);
+  const stage = lost ? 'lost' : String(Math.min(5, shown));
   const prev = fx.misses[key];
-  const prevShown = prev == null ? shown : partsFor(prev, max);
   fx.misses[key] = G.misses;
-  let parts = '';
-  for (let i = 0; i < shown; i++) {
-    let part = won && (i === 2 || i === 3) ? FIG_WIN_ARMS[i - 2] : FIG_PARTS[i];
-    if (!won && i >= prevShown) part = part.replace('class="fp"', 'class="fp fp-new"');
-    parts += part;
-  }
-  const face = shown > 0 ? faceSVG(G, won, lost) : '';
-  return '<svg viewBox="0 0 200 230" role="img" aria-label="' + (won ? 'The kid is saved' : shown + ' of 6 parts drawn') + '">' + HG_DEFS +
-    '<ellipse cx="96" cy="216" rx="84" ry="10" fill="url(#hg-grass)"/>' +
-    '<g filter="url(#hg-shadow)">' +
-      '<rect x="24" y="198" width="112" height="14" rx="5" fill="url(#hg-wood-h)"/>' +
-      '<rect x="46" y="14" width="14" height="190" rx="5" fill="url(#hg-wood-v)"/>' +
-      '<rect x="40" y="12" width="112" height="13" rx="5" fill="url(#hg-wood-h)"/>' +
-      '<rect x="52" y="36" width="10" height="46" rx="4" fill="url(#hg-wood-v)" transform="rotate(45 57 59)"/>' +
-      '<circle cx="53" cy="20" r="1.8" fill="#6b3f1c"/><circle cx="146" cy="18" r="1.8" fill="#6b3f1c"/><circle cx="53" cy="204" r="1.8" fill="#6b3f1c"/>' +
-    '</g>' +
-    '<path class="rope" d="M140 24 V' + (won ? '30' : '49') + '" stroke="#d6aa62" stroke-width="4" stroke-linecap="round"/>' +
-    '<path d="M140 24 V' + (won ? '30' : '49') + '" stroke="#9c7434" stroke-width="4" stroke-dasharray="2 3" stroke-linecap="round"/>' +
-    '<g class="body-g" filter="url(#hg-shadow)">' + parts + face + '</g></svg>';
+  const grew = prev != null && partsFor(prev, G.settings.maxMisses) < shown && !lost;
+  const k = avatarKeyOf(G, heroOf(G));
+  const pose = lost ? 'down' : won ? 'cheer' : 'stand';
+  const src = '/avatars/' + k + (pose === 'stand' ? '' : '-' + pose) + '.png';
+  const label = won ? 'Saved! The word was solved.' : lost ? 'Out of lives. The crate tipped over.' : Math.min(5, shown) + ' of 5 gallows pieces built';
+  return '<div class="hang' + (grew ? ' grew' : '') + '" role="img" aria-label="' + label + '">' +
+    '<img class="hang-bg" src="/hangman/stage-' + stage + '.png" alt="" draggable="false">' +
+    '<img class="hang-kid ' + pose + '" src="' + src + '" alt="" draggable="false">' +
+    (lost ? '<span class="dizzy" aria-hidden="true"><i>★</i><i>✦</i><i>★</i></span>' : '') +
+  '</div>';
 }
 function livesHTML(G) {
   const max = G.settings.maxMisses, left = Math.max(0, max - G.misses);
@@ -696,7 +686,7 @@ function boardShell(o) {
   return '<section class="board' + (o.rail ? ' has-rail' : '') + '"><div class="play">' +
     '<div class="roundline">' + o.eyebrow + '</div>' +
     (teamsOn(G) && G.pickTeam ? vsBanner(G) : '') +
-    '<div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureSVG(G, o.key) + '</div></div>' +
+    '<div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureHTML(G, o.key) + '</div></div>' +
     livesHTML(G) +
     (o.clue ? '<div class="clue">' + o.clue + '</div>' : '') +
     (t ? '<div class="tiles' + (shake ? ' shake' : '') + (won ? ' win' : '') + '" role="img" aria-label="' + esc(t.aria) + '">' + t.html + '</div>' : '') +
@@ -742,8 +732,12 @@ function clueFor(G) {
   return '<span class="cat-chip"><span class="eyebrow">Category</span><b>' + esc(catLabel(G.category)) + '</b></span><span class="clue-from">' + from + '</span>' +
     (G.hint ? '<span class="clue-hint">Hint: <b>\u201c' + esc(G.hint) + '\u201d</b></span>' : '');
 }
+function timerHTML(G) {
+  if (!G.deadline || !(G.status === 'setting' || G.status === 'playing')) return '';
+  return '<span class="timer" data-deadline="' + G.deadline + '" role="timer" aria-label="Time left"><svg viewBox="0 0 36 36"><circle class="tr-bg" cx="18" cy="18" r="15.5"/><circle class="tr-fg" cx="18" cy="18" r="15.5" pathLength="100"/></svg><b>' + Math.max(0, Math.ceil((G.deadline - serverNow()) / 1000)) + '</b></span>';
+}
 function roundEyebrow(G) {
-  return '<span class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + (teamsOn(G) && G.pickTeam ? ' \u00b7 ' + TEAM[G.pickTeam].name + ' picks, ' + TEAM[otherTeam(G.pickTeam)].name + ' guesses' : '') + '</span>' + (G.kind === 'online' ? '<span class="code-chip">' + esc(G.code) + '</span>' : '');
+  return timerHTML(G) + '<span class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + (teamsOn(G) && G.pickTeam ? ' \u00b7 ' + TEAM[G.pickTeam].name + ' picks, ' + TEAM[otherTeam(G.pickTeam)].name + ' guesses' : '') + '</span>' + (G.kind === 'online' ? '<span class="code-chip">' + esc(G.code) + '</span>' : '');
 }
 function playersHTML(G, lobby, list) {
   const ids = list || (lobby ? G.order : G.order.slice().sort((a, b) => (G.scores[b] || 0) - (G.scores[a] || 0)));
@@ -773,6 +767,7 @@ function feedLine(G, e) {
     case 'set': return teamsOn(G) && G.teams[e.by] ? n + ' locked in the ' + esc(teamName(G.teams[e.by])) + '’s word' : n + ' picked a word';
     case 'random': return 'A random word was drawn';
     case 'skip': return '<b>' + esc(nameOf(G, e.who)) + '</b>’s turn was skipped';
+    case 'timeup': return e.setting ? 'Time ran out, so a random word was drawn' : e.who ? '<b>' + esc(nameOf(G, e.who)) + '</b> ran out of time' : 'Time ran out, one life lost';
     case 'join': return n + ' joined';
     case 'leave': return n + ' left the game';
     case 'hanged': return 'Out of lives';
@@ -967,6 +962,7 @@ function renderModal() {
       '<li>The daily word is the same for everyone and changes at midnight. Share your result to compare with friends.</li>' +
       '<li>Every word is worth the same, short or long. Letters you uncover share 60 points. Finishing the word earns 40 more, plus 5 for each life left. If nobody solves it, whoever gave the word earns 50.</li>' +
       '<li>The turn passes after every guess, so everyone plays every round. Each player (or each team) takes a turn giving the word.</li>' +
+      '<li>With the timer on, you have 60 seconds to guess and 60 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn.</li>' +
       '<li>Team battle: Red vs Blue. One team agrees on a word and its category in its private chat, the other team guesses, then they swap. Team points decide the winner.</li>' +
       '<li>On a computer you can type letters on your keyboard.</li></ul>';
   } else if (S.modal === 'stats') {
@@ -1034,7 +1030,7 @@ document.addEventListener('click', e => {
     case 'local-resume': { const L = store.get('local', null); if (L) { closeOnline(); S.local = { G: L }; S.kind = 'local'; S.view = 'game'; S.reveal = false; render(); } break; }
     case 'padd': if (S.setup.names.length < 6) { S.setup.names.push(''); store.set('setup', S.setup); render(); } break;
     case 'pdel': { const i = Number(el.dataset.i); S.setup.names.splice(i, 1); S.setup.teams.splice(i, 1); (S.setup.avatars || []).splice(i, 1); store.set('setup', S.setup); render(); break; }
-    case 'lsetting': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'maxMisses' || k === 'rounds') v = Number(v); S.setup.settings[k] = v; store.set('setup', S.setup); render(); break; }
+    case 'lsetting': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'maxMisses' || k === 'rounds' || k === 'timer') v = Number(v); S.setup.settings[k] = v; store.set('setup', S.setup); render(); break; }
     case 'local-start': startLocal(); break;
     case 'reveal': S.reveal = true; S.err = ''; render(); { const i = $('#sw-word'); if (i) i.focus(); } break;
     case 'toggle-show': { S.showWord = !S.showWord; const i = $('#sw-word'); if (i) i.type = S.showWord ? 'text' : 'password'; el.textContent = S.showWord ? 'Hide' : 'Show'; break; }
@@ -1061,7 +1057,7 @@ document.addEventListener('click', e => {
     case 'invite-dismiss': S.invite = ''; history.replaceState(null, '', location.pathname); render(); break;
     case 'invite': if (G) shareOrCopy({ title: 'Hangtime', text: 'Play Hangtime with me. Game code ' + G.code + '.', url: inviteUrl(G.code) }, 'Invite link copied'); break;
     case 'copy-code': if (G) copyText(inviteUrl(G.code), 'Invite link copied'); break;
-    case 'setting': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'maxMisses' || k === 'rounds') v = Number(v); if (k === 'turns') v = v === 'true'; dispatch({ t: 'settings', settings: { [k]: v } }); break; }
+    case 'setting': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'maxMisses' || k === 'rounds' || k === 'timer') v = Number(v); if (k === 'turns') v = v === 'true'; dispatch({ t: 'settings', settings: { [k]: v } }); break; }
     case 'start': dispatch({ t: 'start' }); break;
     case 'leave': leaveOnline(); break;
     case 'save-nick': {

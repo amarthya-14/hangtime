@@ -8,7 +8,7 @@ const TTL = 24 * 3600;
 const MAX_PLAYERS = 12;
 const ONLINE_MS = 25000;
 const REACTS = ['nice', 'close', 'gg', 'hurry', 'oops', 'haha', 'wow', 'love'];
-const MOVES = ['guess', 'solve', 'setword', 'skip', 'next', 'start', 'again', 'settings', 'team', 'shuffle'];
+const MOVES = ['guess', 'solve', 'setword', 'skip', 'next', 'start', 'again', 'settings', 'team', 'shuffle', 'timeout'];
 const CHAT_KEEP = 60;
 // Writes the game only if nobody else wrote it since we read it, so simultaneous guesses never overwrite each other.
 const CAS = "local v = redis.call('GET', KEYS[2]) if (v or '0') == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[4]) redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4]) return 1 end return 0";

@@ -11,7 +11,7 @@ const CATS = {
 };
 const CAT_KEYS = Object.keys(CATS);
 const ALL = CAT_KEYS.flatMap(c => CATS[c].words.map(w => ({ w, c })));
-const DEFAULTS = { mode: 'each', source: 'friends', category: 'any', turns: true, maxMisses: 6, rounds: 0 };
+const DEFAULTS = { mode: 'each', source: 'friends', category: 'any', turns: true, maxMisses: 6, rounds: 0, timer: 0 };
 const TEAM_IDS = ['a', 'b'];
 // Full-body 3D chibi characters (Kenney Mini Characters, CC0), rendered to PNG in public/avatars.
 const AVATARS = [['f1', '👧'], ['m1', '👦'], ['f2', '👧'], ['m2', '👦'], ['f3', '👧'], ['m3', '👦'], ['f4', '👧'], ['m4', '👦'], ['f5', '👧'], ['m5', '👦'], ['f6', '👧'], ['m6', '👦']];
@@ -100,6 +100,8 @@ function letterSlots(w) { return [...w].filter(isLetter).length || 1; }
 function revealedSlots(w, g) { return [...w].filter(ch => isLetter(ch) && g.includes(ch)).length; }
 function poolShare(w, k) { return Math.round(LETTER_POOL * k / letterSlots(w)); }
 function finishBonus(G) { return SOLVE_BONUS + LIFE_BONUS * Math.max(0, G.settings.maxMisses - G.misses); }
+// Optional turn timer: 60 seconds to guess (per turn) and to give the word.
+function setDeadline(G) { G.deadline = G.settings.timer && (G.status === 'setting' || G.status === 'playing') ? Date.now() + G.settings.timer * 1000 : 0; }
 function addTeamPts(G, t, p) { if (!t) return; G.teamScores[t] = (G.teamScores[t] || 0) + p; G.roundTeamPts[t] = (G.roundTeamPts[t] || 0) + p; }
 function addPts(G, id, p) {
   if (!id) return;
@@ -128,6 +130,7 @@ function randomize(G, rnd) {
   G.setter = null; setSecret(G, p.w, '', p.c); G.status = 'playing';
   G.turn = G.settings.turns ? firstGuesser(G) : null;
   logIt(G, { k: 'random' });
+  setDeadline(G);
 }
 function beginRound(G, rnd) {
   resetRound(G);
@@ -137,13 +140,15 @@ function beginRound(G, rnd) {
     G.pickTeam = G.round % 2 === 1 ? 'a' : 'b';
     if (G.settings.source === 'friends') G.status = 'setting';
     else randomize(G, rnd);
+    setDeadline(G);
     return;
   }
   if (G.settings.source === 'friends' && n >= 2) { G.setter = G.order[(G.round - 1) % n]; G.status = 'setting'; }
   else randomize(G, rnd);
+  setDeadline(G);
 }
 function endRound(G, result, solver, w) {
-  G.status = 'over'; G.result = result; G.solver = solver || null; G.turn = null; G.answer = w;
+  G.status = 'over'; G.result = result; G.solver = solver || null; G.turn = null; G.answer = w; G.deadline = 0;
   if (result === 'hanged') {
     if (teamsOn(G) && G.pickTeam) {
       addTeamPts(G, G.pickTeam, SURVIVE_BONUS);
@@ -192,6 +197,7 @@ function act(G0, a, by, rnd) {
       }
       // The turn passes after every guess, so everyone gets to play each round.
       if (G.settings.turns) G.turn = nextTurn(G, by);
+      setDeadline(G);
       return G;
     }
     case 'solve': {
@@ -205,7 +211,7 @@ function act(G0, a, by, rnd) {
       } else {
         G.misses++; G.wrongWords.push(w.slice(0, 30)); logIt(G, { k: 'wrong', by, w: w.slice(0, 30) });
         if (G.misses >= G.settings.maxMisses) endRound(G, 'hanged', null, word);
-        else if (G.settings.turns) G.turn = nextTurn(G, by);
+        else { if (G.settings.turns) G.turn = nextTurn(G, by); setDeadline(G); }
       }
       return G;
     }
@@ -218,6 +224,7 @@ function act(G0, a, by, rnd) {
       setSecret(G, w, a.hint, cat);
       G.status = 'playing';
       G.turn = G.settings.turns ? (teamsOn(G) ? firstGuesser(G) : nextTurn(G, G.setter)) : null;
+      setDeadline(G);
       logIt(G, { k: 'set', by });
       return G;
     }
@@ -225,6 +232,7 @@ function act(G0, a, by, rnd) {
       if (G.status === 'setting') { randomize(G, rnd); return G; }
       if (G.status !== 'playing' || !G.settings.turns || !G.turn) return null;
       const who = G.turn; G.turn = nextTurn(G, who); logIt(G, { k: 'skip', by, who });
+      setDeadline(G);
       return G;
     }
     case 'next': {
@@ -251,6 +259,25 @@ function act(G0, a, by, rnd) {
       if (typeof s.turns === 'boolean') G.settings.turns = s.turns;
       if ([6, 8, 10].includes(s.maxMisses)) G.settings.maxMisses = s.maxMisses;
       if ([0, 3, 5, 8].includes(s.rounds)) G.settings.rounds = s.rounds;
+      if ([0, 60].includes(s.timer)) G.settings.timer = s.timer;
+      return G;
+    }
+    case 'timeout': {
+      // Anyone's page may report the clock running out; it only counts once, and only once it really has.
+      if (!G.settings.timer || !G.deadline || a.deadline !== G.deadline || Date.now() < G.deadline - 1500) return null;
+      if (G.status === 'setting') {
+        const who = teamsOn(G) && G.pickTeam ? null : G.setter;
+        randomize(G, rnd);
+        logIt(G, { k: 'timeup', who, team: teamsOn(G) ? G.pickTeam : null, setting: true });
+        return G;
+      }
+      if (G.status !== 'playing') return null;
+      if (G.settings.turns) { const who = G.turn; G.turn = nextTurn(G, who); logIt(G, { k: 'timeup', who }); }
+      else {
+        G.misses++; logIt(G, { k: 'timeup' });
+        if (G.misses >= G.settings.maxMisses) { endRound(G, 'hanged', null, word); return G; }
+      }
+      setDeadline(G);
       return G;
     }
     case 'team': {
@@ -285,7 +312,7 @@ function act(G0, a, by, rnd) {
       if (G.status === 'setting' && G.setter === id) randomize(G, rnd);
       else if (G.status === 'playing') {
         if (G.setter === id) G.setter = null;
-        if (wasTurn && G.settings.turns) G.turn = (nt && G.order.includes(nt) && nt !== G.setter) ? nt : (guessersOf(G)[0] || null);
+        if (wasTurn && G.settings.turns) { G.turn = (nt && G.order.includes(nt) && nt !== G.setter) ? nt : (guessersOf(G)[0] || null); setDeadline(G); }
       }
       return G;
     }

@@ -171,4 +171,34 @@ for (let r = 1; r <= 3; r++) { setters.push(R3.setter); R3 = L.act(R3, { t: 'set
 assert.deepEqual(setters, ['a', 'b', 'c'], 'with 3 players everyone gives a word once');
 console.log('FAIRNESS TESTS PASSED');
 
+// ---------- optional 60-second timer ----------
+const realNow = Date.now;
+let clock = realNow();
+Date.now = () => clock;
+let T6 = L.newGame('local', { host: 'a', order: ['a', 'b', 'c'], settings: { source: 'friends', timer: 60 } });
+T6 = L.act(T6, { t: 'start' }, 'a');
+assert.equal(T6.status, 'setting'); assert.equal(T6.deadline, clock + 60000, 'giving the word gets 60 seconds');
+assert.equal(L.act(T6, { t: 'timeout', deadline: T6.deadline }, 'b'), null, 'no time-out before the clock runs out');
+clock += 61000;
+let T7 = L.act(T6, { t: 'timeout', deadline: T6.deadline }, 'b');
+assert.equal(T7.status, 'playing', 'a slow word-giver gets a random word'); assert.ok(L.wordOf(T7).length > 2);
+assert.equal(T7.deadline, clock + 60000, 'guessing starts a fresh 60 seconds');
+assert.equal(L.act(T7, { t: 'timeout', deadline: T6.deadline }, 'b'), null, 'an old deadline is ignored');
+const turnBefore = T7.turn, missesBefore = T7.misses;
+clock += 61000;
+T7 = L.act(T7, { t: 'timeout', deadline: T7.deadline }, 'c');
+assert.notEqual(T7.turn, turnBefore, 'time up passes the turn'); assert.equal(T7.misses, missesBefore, 'without costing a life');
+const miss = 'QXZJVKWYFB'.split('').find(c => !L.wordOf(T7).includes(c));
+const dl = T7.deadline; clock += 5000;
+T7 = L.act(T7, { t: 'guess', letter: miss }, T7.turn);
+assert.equal(T7.deadline, clock + 60000, 'every guess restarts the clock'); assert.notEqual(T7.deadline, dl);
+let FF = L.newGame('local', { host: 'a', order: ['a', 'b'], settings: { source: 'random', timer: 60, turns: false } });
+FF = L.act(FF, { t: 'start' }, 'a'); clock += 61000;
+FF = L.act(FF, { t: 'timeout', deadline: FF.deadline }, 'a');
+assert.equal(FF.misses, 1, 'with everyone guessing at once, nobody guessing in time costs a life');
+let NT = L.act(L.newGame('local', { host: 'a', order: ['a', 'b'] }), { t: 'start' }, 'a');
+assert.equal(NT.deadline, 0, 'no timer unless chosen');
+Date.now = realNow;
+console.log('TIMER TESTS PASSED');
+
 

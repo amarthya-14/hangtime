@@ -578,6 +578,37 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 
 .pl.off .av .bubble img{opacity:1}
 
+/* 3D hangman scene */
+.figure{width:min(300px,72vw);aspect-ratio:1}
+.hang{position:relative;width:100%;height:100%}
+.hang img{position:absolute;pointer-events:none;user-select:none;-webkit-user-drag:none}
+.hang-bg{inset:0;width:100%;height:100%;filter:drop-shadow(0 18px 20px rgba(0,0,0,.18))}
+.hang.grew .hang-bg{animation:thud .5s var(--spring)}
+@keyframes thud{0%{transform:translateY(-6px) scale(1.02)}60%{transform:translateY(2px) scale(.995)}100%{transform:none}}
+.hang-kid{filter:drop-shadow(0 4px 3px rgba(0,0,0,.25));transform-origin:50% 100%}
+.hang-kid.stand{left:43.6%;top:35.1%;width:28.9%;animation:bob 2.4s ease-in-out infinite;animation-delay:var(--bob,0s)}
+.hang-kid.cheer{left:42.8%;top:30%;width:30.9%;animation:celebrate .8s var(--spring) both,hop .7s .8s ease-in-out 3}
+.hang-kid.down{left:30%;top:52%;width:28.9%;animation:tumble .9s cubic-bezier(.3,.8,.4,1) both}
+@keyframes tumble{0%{transform:translate(40%,-60%) rotate(25deg);opacity:0}60%{transform:translate(0,4%) rotate(-4deg);opacity:1}100%{transform:none}}
+.figure.hurt .hang-kid{animation:wobble .5s}
+@keyframes wobble{20%{transform:rotate(-8deg)}45%{transform:rotate(6deg)}70%{transform:rotate(-3deg)}}
+.dizzy{position:absolute;left:36%;top:56%;width:14%;height:8%;animation:spin 1.6s linear infinite;color:var(--turn);font-size:clamp(10px,3vw,15px)}
+.dizzy i{position:absolute;font-style:normal}
+.dizzy i:nth-child(1){left:0;top:30%}.dizzy i:nth-child(2){left:42%;top:0}.dizzy i:nth-child(3){right:0;top:40%}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* turn timer */
+.timer{--p:1;position:relative;display:inline-grid;place-items:center;width:38px;height:38px;flex:none}
+.timer svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.timer circle{fill:none;stroke-width:3.5}
+.tr-bg{stroke:var(--line)}
+.tr-fg{stroke:var(--hit);stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:calc(100 - var(--p) * 100);transition:stroke-dashoffset .25s linear,stroke .3s}
+.timer b{font-family:var(--font-display);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.timer.low .tr-fg{stroke:var(--miss)}
+.timer.low{animation:pulse 1s ease-in-out infinite}
+.timer.low b{color:var(--miss)}
+@keyframes pulse{50%{transform:scale(1.12)}}
+
 /* modal, toast */
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:20px;z-index:40;animation:fade .15s ease}
 @keyframes fade{from{opacity:0}}
