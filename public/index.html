@@ -575,7 +575,7 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 @keyframes pulse{50%{transform:scale(1.12)}}
 
 /* fit the whole board on screen: the hangman shrinks on short screens so the keyboard stays in view */
-.figure{width:min(300px,72vw,34vh);width:min(300px,72vw,34svh)}
+.figure{width:min(300px,72vw,max(170px,calc(100vh - 690px)));width:min(300px,72vw,max(170px,calc(100svh - 690px)))}
 .status-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:44px}
 .status-row .timer{width:44px;height:44px}
 .status-row .timer b{font-size:15px}
@@ -590,15 +590,23 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .rail .dock-btn{flex:1 1 0;width:auto;height:42px}
 .rail .dock-btn img{width:28px;height:28px}
 @media (min-width:920px){
-  .board.has-rail .arena{grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:center;column-gap:22px}
-  .board.has-rail .arena-fig{align-content:center}
-  .board.has-rail .stage{width:100%}
-  .board.has-rail .figure{width:min(280px,100%,calc(100vh - 290px));width:min(280px,100%,calc(100svh - 290px));min-width:150px}
   .board.has-rail .play .dock{display:none}
 }
 @media (max-width:919px){.rail .dock{display:none}.figure{width:min(260px,72vw,26vh);width:min(260px,72vw,26svh)}}
 @media (max-width:600px){.vs-avs{display:none}.vs-side{padding:8px 12px;gap:2px}.vs-score{font-size:28px}}
-@media (max-height:640px){.vs-avs{display:none}.play{gap:8px}.top{margin-bottom:8px}}
+/* laptops: a slimmer score banner, hangman and keyboard so the whole board fits without scrolling */
+@media (min-width:920px) and (max-height:860px){
+  .figure{width:max(110px,calc(100vh - 440px));width:max(110px,calc(100svh - 440px));max-width:300px}
+  .vs-avs,.vs-role,.lives-n{display:none}
+  .vs-side,.vs-side.t-b{display:flex;align-items:center;justify-content:space-between;padding:6px 14px}
+  .vs-side.t-b{flex-direction:row-reverse}
+  .vs-score{font-size:24px}.vs-name{font-size:17px}
+  .play{gap:6px}.top{margin-bottom:6px}.wrap{padding-top:4px}
+  .key{height:36px;font-size:16px}.kb{gap:5px;margin-top:0;max-width:440px}
+  .arena-main .t{--size:max(22px,min(38px,calc((100cqw - 8px) / (var(--n,6) + 1.4) - 5px)))}
+  .status-row{min-height:34px}.status-row .timer{width:34px;height:34px}.status-row .timer b{font-size:13px}
+  .cat-chip{padding-block:3px}
+}
 
 /* reaction dock: hover magnifies like a dock, tap sends */
 .dock{display:flex;gap:2px;justify-content:center;padding:6px 10px;margin-top:2px;border-radius:999px;background:color-mix(in srgb,var(--surface) 80%,transparent);border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);max-width:100%}
