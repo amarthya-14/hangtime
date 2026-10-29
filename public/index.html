@@ -516,6 +516,41 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .floaty img{width:64px;height:64px;filter:drop-shadow(0 8px 10px rgba(0,0,0,.25))}
 @keyframes floatup3d{0%{transform:translate(0,0) scale(.3) rotate(-15deg);opacity:0}12%{opacity:1;transform:translate(0,-40px) scale(1.15) rotate(8deg)}55%{transform:translate(var(--sway,0),-34vh) scale(1) rotate(-6deg)}100%{transform:translate(calc(var(--sway,0) * -1),-62vh) scale(.9) rotate(4deg);opacity:0}}
 
+/* 3D hangman */
+:root{--fig-shirt-1:#ff8a5c;--fig-shirt-2:#e35d3a}
+.figure{width:min(210px,48vw);aspect-ratio:200/230}
+.figure .fp{transform-box:fill-box;transform-origin:50% 0%}
+.figure .fp-new{animation:partpop .6s var(--spring) both}
+@keyframes partpop{0%{transform:scale(0) translateY(-10px);opacity:0}100%{transform:none;opacity:1}}
+.figure.lost .body-g{animation:sway 2.4s ease-in-out infinite;transform-origin:140px 26px;filter:saturate(.35) url(#hg-shadow)}
+@keyframes sway{50%{transform:rotate(4deg)}}
+.figure.won .body-g{animation:hop .7s ease-in-out 3;transform-origin:140px 180px}
+.figure .sweat{animation:sweat 1.4s ease-in infinite}
+@keyframes sweat{0%{transform:translateY(0);opacity:0}30%{opacity:1}100%{transform:translateY(8px);opacity:0}}
+
+/* speech-bubble reactions */
+.bubble{position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);display:flex;align-items:center;gap:5px;white-space:nowrap;padding:5px 10px 5px 6px;border-radius:14px;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.18),0 2px 0 var(--edge);font-family:var(--font-display);font-size:13px;z-index:20;pointer-events:none;animation:bubble 3.6s var(--spring) both}
+.bubble::after{content:"";position:absolute;left:50%;top:100%;width:10px;height:10px;background:var(--surface);border-right:1px solid var(--line);border-bottom:1px solid var(--line);transform:translate(-50%,-5px) rotate(45deg)}
+.bubble img{width:22px;height:22px;margin:0}
+.bubble b{font-weight:600}
+@keyframes bubble{0%{opacity:0;transform:translate(-50%,8px) scale(.5)}8%{opacity:1;transform:translate(-50%,0) scale(1.08)}14%{transform:translate(-50%,0) scale(1)}85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px) scale(.95)}}
+.pl .bubble{left:auto;right:auto;bottom:auto;top:50%;left:calc(100% + 8px);transform:translateY(-50%)}
+.pl .bubble::after{left:-5px;top:50%;transform:translateY(-50%) rotate(135deg)}
+@keyframes bubble-side{0%{opacity:0;transform:translateY(-50%) scale(.5)}8%{opacity:1;transform:translateY(-50%) scale(1.08)}14%{transform:translateY(-50%) scale(1)}85%{opacity:1}100%{opacity:0}}
+.pl .bubble{animation-name:bubble-side}
+.vs{overflow:visible}
+.vs-side.t-a{border-radius:18px 0 0 18px}
+.vs-side.t-b{border-radius:0 18px 18px 0}
+.vs-avs .bubble{bottom:calc(100% + 4px)}
+.reacts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.react{width:auto;height:auto;display:flex;align-items:center;gap:6px;padding:6px 8px;justify-content:flex-start;font-family:var(--font-display);font-weight:600;font-size:13.5px;border-radius:12px}
+.react img{width:24px;height:24px}
+.react span{white-space:nowrap}
+
+.bubble{text-transform:none;letter-spacing:0}
+.pl.off .av{opacity:1}
+.pl.off .av img{opacity:.45}
+
 /* modal, toast */
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:20px;z-index:40;animation:fade .15s ease}
 @keyframes fade{from{opacity:0}}

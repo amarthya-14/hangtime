@@ -39,10 +39,10 @@ const v = r.j.game.version;
 r = await get({ code, key: B, v, hb: 1 });
 assert.equal(r.j.game, undefined); assert.ok(r.j.online.length >= 1);
 // reactions are delivered to polls
-await post({ op: 'react', key: C, code, e: 'fire' });
+await post({ op: 'react', key: C, code, e: 'gg' });
 assert.equal((await post({ op: 'react', key: C, code, e: '<script>' })).status, 400);
 r = await get({ code, key: A, v, rx: 0 });
-assert.ok(r.j.rx.some(x => x.e === 'fire'));
+assert.ok(r.j.rx.some(x => x.e === 'gg'));
 // everyone-at-once: simultaneous guesses must both land (compare-and-set retries)
 let F = (await post({ op: 'create', key: A, nick: 'Asha' })).j; const fc = F.code;
 await post({ op: 'join', key: B, code: fc, nick: 'Ravi' }); await post({ op: 'join', key: C, code: fc, nick: 'Kai' });

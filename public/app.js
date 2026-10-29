@@ -15,10 +15,26 @@ const store = {
 const catLabel = c => (CATS[c] && CATS[c].label) || (c ? String(c) : 'Mixed');
 const CAT_SUGGEST = ['Movie', 'Animal', 'Food', 'Place', 'Sport', 'Person', 'Thing', 'Song', 'Brand', 'Game'];
 const initials = n => (String(n || '?').trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2) || '?');
-// 3D reactions (Fluent Emoji, MIT) in public/reactions
-const REACTS = ['clap', 'laugh', 'shock', 'fire', 'think', 'party', 'heart'];
-const REACT_NAMES = { clap: 'applause', laugh: 'laughing', shock: 'shock', fire: 'fire', think: 'thinking', party: 'party', heart: 'love' };
-const reactImg = k => '<img src="/reactions/' + k + '.png" alt="" draggable="false">';
+// Quick reactions pop up as a speech bubble above the sender's avatar (3D icons: Fluent Emoji, MIT).
+const QUICK = { nice: ['Nice!', 'clap'], close: ['So close!', 'shock'], gg: ['GG', 'party'], hurry: ['Hurry up!', 'hurry'], oops: ['Oops!', 'oops'], haha: ['Haha', 'laugh'], wow: ['Wow!', 'wow'], love: ['Love it', 'heart'] };
+const REACTS = Object.keys(QUICK);
+const BUBBLE_MS = 3600;
+const reactImg = k => '<img src="/reactions/' + QUICK[k][1] + '.png" alt="" draggable="false">';
+function bubbleHTML(id) {
+  const b = ON && ON.bubbles && ON.bubbles[id];
+  if (!b) return '';
+  const age = Date.now() - b.at;
+  if (age > BUBBLE_MS || !QUICK[b.k]) return '';
+  // A negative delay keeps the animation continuous when the page re-renders mid-bubble.
+  return '<span class="bubble" style="animation-delay:-' + age + 'ms">' + reactImg(b.k) + '<b>' + QUICK[b.k][0] + '</b></span>';
+}
+function showBubble(id, k) {
+  if (!ON || !QUICK[k]) return;
+  ON.bubbles = ON.bubbles || {};
+  ON.bubbles[id] = { k, at: Date.now() };
+  SND.play('pop'); scheduleRender();
+  setTimeout(scheduleRender, BUBBLE_MS + 50);
+}
 const API = '/api/game';
 const TEAM = { a: { name: 'Red', color: 'var(--p2)' }, b: { name: 'Blue', color: 'var(--p1)' } };
 const teamName = t => (TEAM[t] ? TEAM[t].name : '') + ' team';
@@ -121,12 +137,12 @@ function avatarKeyOf(G, id) {
 function avatarImg(k) {
   return '<img src="/avatars/' + k + '.png" alt="" draggable="false" decoding="async" onerror="this.replaceWith(\'' + avatarEmoji(k) + '\')">';
 }
-function avatarHTML(G, id, cls) {
+function avatarHTML(G, id, cls, withBubble) {
   const idx = Math.max(0, G.order.indexOf(id));
   const online = G.kind === 'online' && ON && ON.online.has(id);
   const t = teamsOn(G) && G.teams && G.teams[id];
   const color = t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')';
-  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + '</span>';
+  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + (withBubble ? bubbleHTML(id) : '') + '</span>';
 }
 function myNick() { return String(store.get('nick', '') || '').slice(0, 20); }
 function myAvatar() {
@@ -180,14 +196,6 @@ function confetti(n) {
     if (alive && now - t0 < 4200) confetti.raf = requestAnimationFrame(step); else ctx.clearRect(0, 0, W, H);
   };
   confetti.raf = requestAnimationFrame(step);
-}
-function floatEmoji(e) {
-  if (!REACTS.includes(e)) return;
-  if (document.querySelectorAll('.floaty').length > 14) return;
-  const el = document.createElement('span');
-  el.className = 'floaty'; el.innerHTML = reactImg(e); el.style.left = (12 + Math.random() * 76) + '%';
-  el.style.setProperty('--sway', (Math.random() * 60 - 30).toFixed(0) + 'px');
-  document.body.appendChild(el); setTimeout(() => el.remove(), 2400);
 }
 function gameEffects(prev, G, me) {
   if (!prev) return;
@@ -286,7 +294,7 @@ async function poll() {
     for (const x of j.rx || []) {
       ON.rxT = Math.max(ON.rxT, x.t);
       if (first) continue;
-      if (x.k === 'react') floatEmoji(x.e);
+      if (x.k === 'react') { if (x.id !== ME.id) showBubble(x.id, x.e); }
       else if (x.k === 'nudge' && x.to === ME.id && x.id !== ME.id) { toast('Your friends are waiting on you'); SND.play('nudge'); }
     }
     if (first) ON.rxT = Math.max(ON.rxT, j.now || 0);
@@ -560,14 +568,43 @@ function renderSetup() {
   '</div></section>';
 }
 function partsFor(m, max) { return Math.min(6, Math.ceil(m * 6 / Math.max(1, max))); }
-const PARTS = [
-  '<circle cx="140" cy="64" r="16" pathLength="1"', '<path d="M140 80 V134" pathLength="1"', '<path d="M140 94 L118 120" pathLength="1"',
-  '<path d="M140 94 L162 120" pathLength="1"', '<path d="M140 134 L122 172" pathLength="1"', '<path d="M140 134 L158 172" pathLength="1"'
+// A colourful 3D-style hangman: wooden gallows and a cartoon kid drawn part by part.
+const FIG_PARTS = [
+  // head with hair; the face is drawn separately so it can react
+  '<g class="fp"><circle cx="140" cy="66" r="17" fill="url(#hg-skin)" stroke="#7a4a2a" stroke-opacity=".35" stroke-width="1.5"/><path d="M123 62c1-12 9-18 18-18s17 6 17 17c-5-6-11-8-17-6-6-3-13 0-18 7z" fill="url(#hg-hair)"/></g>',
+  // body: a T-shirt
+  '<g class="fp"><path d="M126 86h28c4 0 6 3 6 7v26c0 5-3 8-8 8h-24c-5 0-8-3-8-8V93c0-4 2-7 6-7z" fill="url(#hg-shirt)"/><path d="M134 86c2 4 10 4 12 0" stroke="#000" stroke-opacity=".18" stroke-width="2" fill="none"/></g>',
+  '<g class="fp"><path d="M127 92 L112 116" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M127 92 L121 102" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
+  '<g class="fp"><path d="M153 92 L168 116" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M153 92 L159 102" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
+  '<g class="fp"><path d="M134 126 L129 160" stroke="url(#hg-pants)" stroke-width="10" stroke-linecap="round"/><ellipse cx="126" cy="164" rx="8" ry="4.5" fill="#2b2f3a"/></g>',
+  '<g class="fp"><path d="M146 126 L151 160" stroke="url(#hg-pants)" stroke-width="10" stroke-linecap="round"/><ellipse cx="154" cy="164" rx="8" ry="4.5" fill="#2b2f3a"/></g>'
 ];
-const WIN_PARTS = [
-  '<circle cx="140" cy="64" r="16" pathLength="1"', '<path d="M140 80 V134" pathLength="1"', '<path d="M140 94 L118 70" pathLength="1"',
-  '<path d="M140 94 L162 70" pathLength="1"', '<path d="M140 134 L122 172" pathLength="1"', '<path d="M140 134 L158 172" pathLength="1"'
+// Arms up for the rescue pose
+const FIG_WIN_ARMS = [
+  '<g class="fp"><path d="M127 92 L113 68" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M127 92 L122 82" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>',
+  '<g class="fp"><path d="M153 92 L167 68" stroke="url(#hg-skin-l)" stroke-width="8" stroke-linecap="round"/><path d="M153 92 L158 82" stroke="url(#hg-shirt)" stroke-width="10" stroke-linecap="round"/></g>'
 ];
+const HG_DEFS = '<defs>' +
+  '<linearGradient id="hg-wood-v" x1="0" x2="1"><stop offset="0" stop-color="#b9783f"/><stop offset=".45" stop-color="#d89a5c"/><stop offset="1" stop-color="#8f5a2c"/></linearGradient>' +
+  '<linearGradient id="hg-wood-h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dba066"/><stop offset="1" stop-color="#9a6131"/></linearGradient>' +
+  '<linearGradient id="hg-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd46f"/><stop offset="1" stop-color="#4f9b46"/></linearGradient>' +
+  '<radialGradient id="hg-skin" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ffe2c4"/><stop offset="1" stop-color="#f0ad7e"/></radialGradient>' +
+  '<linearGradient id="hg-skin-l"><stop offset="0" stop-color="#ffd8b3"/><stop offset="1" stop-color="#eba174"/></linearGradient>' +
+  '<linearGradient id="hg-hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4226"/><stop offset="1" stop-color="#3f2414"/></linearGradient>' +
+  '<linearGradient id="hg-shirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--fig-shirt-1)"/><stop offset="1" style="stop-color:var(--fig-shirt-2)"/></linearGradient>' +
+  '<linearGradient id="hg-pants" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a6fb0"/><stop offset="1" stop-color="#2f4d82"/></linearGradient>' +
+  '<filter id="hg-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-opacity=".25"/></filter>' +
+  '</defs>';
+function faceSVG(G, won, lost) {
+  if (lost) return '<g class="hg-face"><path d="M131 62l5 5M136 62l-5 5M144 62l5 5M149 62l-5 5" stroke="#3a2416" stroke-width="2.4" stroke-linecap="round"/><path d="M134 76q6-4 12 0" stroke="#3a2416" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>';
+  const eyes = '<circle cx="134" cy="65" r="2.6" fill="#3a2416"/><circle cx="146" cy="65" r="2.6" fill="#3a2416"/><circle cx="135" cy="64" r=".9" fill="#fff"/><circle cx="147" cy="64" r=".9" fill="#fff"/>';
+  const cheeks = '<circle cx="129" cy="71" r="3" fill="#ff8a80" opacity=".45"/><circle cx="151" cy="71" r="3" fill="#ff8a80" opacity=".45"/>';
+  if (won) return '<g class="hg-face">' + eyes + cheeks + '<path d="M132 72q8 9 16 0z" fill="#7a2e1f"/></g>';
+  const worried = G.misses >= Math.ceil(G.settings.maxMisses * 0.66);
+  const mouth = worried ? '<ellipse cx="140" cy="75" rx="3.4" ry="4" fill="#7a2e1f"/>' : '<path d="M134 73q6 5 12 0" stroke="#7a2e1f" stroke-width="2.4" fill="none" stroke-linecap="round"/>';
+  const sweat = worried ? '<path class="sweat" d="M158 56q3 5 0 7q-3-2 0-7z" fill="#7cc8ff"/>' : '';
+  return '<g class="hg-face">' + eyes + cheeks + mouth + sweat + '</g>';
+}
 function figureSVG(G, key) {
   const max = G.settings.maxMisses;
   const ended = G.status === 'over' || G.status === 'done';
@@ -576,16 +613,25 @@ function figureSVG(G, key) {
   const prev = fx.misses[key];
   const prevShown = prev == null ? shown : partsFor(prev, max);
   fx.misses[key] = G.misses;
-  const P = won ? WIN_PARTS : PARTS;
   let parts = '';
-  for (let i = 0; i < shown; i++) parts += P[i] + ' class="part' + (!won && i >= prevShown ? ' draw' : '') + '"/>';
-  let face = '';
-  if (lost) face = '<path class="face" d="M133 59 l5 5 M138 59 l-5 5 M142 59 l5 5 M147 59 l-5 5"/>';
-  if (won) face = '<path class="face" d="M133 67 q7 6 14 0"/><circle class="face" cx="135" cy="60" r=".8"/><circle class="face" cx="145" cy="60" r=".8"/>';
-  return '<svg viewBox="0 0 200 222" role="img" aria-label="' + (won ? 'The stick figure is free' : shown + ' of 6 parts drawn') + '">' +
-    '<path class="gallows" d="M18 214 H124 M52 214 V16 H140 M52 50 L86 16"/>' +
-    '<path class="rope" d="M140 16 V' + (won ? '30' : '48') + '"/>' +
-    '<g class="body-g">' + parts + face + '</g></svg>';
+  for (let i = 0; i < shown; i++) {
+    let part = won && (i === 2 || i === 3) ? FIG_WIN_ARMS[i - 2] : FIG_PARTS[i];
+    if (!won && i >= prevShown) part = part.replace('class="fp"', 'class="fp fp-new"');
+    parts += part;
+  }
+  const face = shown > 0 ? faceSVG(G, won, lost) : '';
+  return '<svg viewBox="0 0 200 230" role="img" aria-label="' + (won ? 'The kid is saved' : shown + ' of 6 parts drawn') + '">' + HG_DEFS +
+    '<ellipse cx="96" cy="216" rx="84" ry="10" fill="url(#hg-grass)"/>' +
+    '<g filter="url(#hg-shadow)">' +
+      '<rect x="24" y="198" width="112" height="14" rx="5" fill="url(#hg-wood-h)"/>' +
+      '<rect x="46" y="14" width="14" height="190" rx="5" fill="url(#hg-wood-v)"/>' +
+      '<rect x="40" y="12" width="112" height="13" rx="5" fill="url(#hg-wood-h)"/>' +
+      '<rect x="52" y="36" width="10" height="46" rx="4" fill="url(#hg-wood-v)" transform="rotate(45 57 59)"/>' +
+      '<circle cx="53" cy="20" r="1.8" fill="#6b3f1c"/><circle cx="146" cy="18" r="1.8" fill="#6b3f1c"/><circle cx="53" cy="204" r="1.8" fill="#6b3f1c"/>' +
+    '</g>' +
+    '<path class="rope" d="M140 24 V' + (won ? '30' : '49') + '" stroke="#d6aa62" stroke-width="4" stroke-linecap="round"/>' +
+    '<path d="M140 24 V' + (won ? '30' : '49') + '" stroke="#9c7434" stroke-width="4" stroke-dasharray="2 3" stroke-linecap="round"/>' +
+    '<g class="body-g" filter="url(#hg-shadow)">' + parts + face + '</g></svg>';
 }
 function livesHTML(G) {
   const max = G.settings.maxMisses, left = Math.max(0, max - G.misses);
@@ -712,7 +758,7 @@ function playersHTML(G, lobby, list) {
     if (turn) tags.push('Guessing now');
     if (off) tags.push('Away');
     const isMe = G.kind === 'online' && id === ME.id;
-    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '" data-id="' + esc(id) + '">' + avatarHTML(G, id, turn ? 'bob' : '') +
+    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '" data-id="' + esc(id) + '">' + avatarHTML(G, id, turn ? 'bob' : '', true) +
       '<div class="who"><div class="nm">' + esc(nameOf(G, id)) + (isMe ? '<span class="you">you</span>' : '') + '</div>' + (tags.length ? '<div class="tag">' + tags.join(' · ') + '</div>' : '') + '</div>' +
       (lobby ? '' : '<div class="sc">' + (G.scores[id] || 0) + '</div>') + '</li>';
   }).join('') + '</ul>';
@@ -741,7 +787,7 @@ function vsBanner(G, compact) {
     const role = live ? (G.pickTeam === t ? 'Giving the word' : 'Guessing') : (G.status === 'done' && ts[t] > ts[otherTeam(t)] ? 'Winners' : '');
     return '<div class="vs-side t-' + t + (live && G.pickTeam === t ? ' giving' : '') + (live && G.pickTeam !== t ? ' guessing' : '') + '">' +
       '<div class="vs-head"><span class="vs-name">' + TEAM[t].name + '</span>' + (role ? '<span class="vs-role">' + role + '</span>' : '') + '</div>' +
-      '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id)).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
+      '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id, '', true)).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
       '<b class="vs-score" data-k="' + esc(gameKeyBase(G) + t) + '" data-to="' + (ts[t] || 0) + '">' + (fx.score[gameKeyBase(G) + t] != null ? fx.score[gameKeyBase(G) + t] : (ts[t] || 0)) + '</b></div></div>';
   };
   return '<div class="vs' + (compact ? ' compact' : '') + '" role="group" aria-label="Red ' + (ts.a || 0) + ', Blue ' + (ts.b || 0) + '">' + side('a') + '<div class="vs-mid" aria-hidden="true">VS</div>' + side('b') + '</div>';
@@ -762,7 +808,7 @@ function railHTML(G) {
   const reacts = G.kind === 'online';
   return chatHTML(G) +
     '<div class="card"><div class="card-h"><span class="eyebrow">' + (teamsOn(G) ? 'Players' : 'Scores') + '</span></div>' + playersHTML(G) + '</div>' +
-    (reacts ? '<div class="card"><span class="eyebrow">React</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '" aria-label="Send ' + REACT_NAMES[e] + '" title="' + REACT_NAMES[e] + '">' + reactImg(e) + '</button>').join('') + '</div></div>' : '') +
+    (reacts ? '<div class="card"><span class="eyebrow">Quick reactions</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '">' + reactImg(e) + '<span>' + QUICK[e][0] + '</span></button>').join('') + '</div></div>' : '') +
     '<div class="card"><div class="card-h"><span class="eyebrow">Activity</span></div>' + (items.length ? '<ul class="feed">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '<p class="muted small" style="margin:0">Moves show up here.</p>') + '</div>';
 }
 function roundResult(G, word) {
@@ -1031,9 +1077,9 @@ document.addEventListener('click', e => {
     case 'lteam': { const i = Number(el.dataset.i); S.setup.teams[i] = localTeam(i) === 'a' ? 'b' : 'a'; store.set('setup', S.setup); render(); break; }
     case 'nudge': if (ON && G && G.turn) api('nudge', { code: ON.code, to: G.turn }).then(() => toast('Nudge sent'), err => toast(err.msg)); break;
     case 'react': {
-      if (!ON || Date.now() - lastReact < 600) break;
+      if (!ON || Date.now() - lastReact < 1200) break;
       lastReact = Date.now();
-      const em = el.dataset.e; floatEmoji(em);
+      const em = el.dataset.e; showBubble(ME.id, em);
       api('react', { code: ON.code, e: em }).catch(() => {});
       break;
     }
