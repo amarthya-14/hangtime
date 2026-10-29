@@ -5,15 +5,15 @@ const CATS = {
   places: { label: 'Places', words: ['BARCELONA','REYKJAVIK','HYDERABAD','KYOTO','MARRAKESH','SINGAPORE','PATAGONIA','ISTANBUL','VENICE','HONOLULU','CAPE TOWN','KATHMANDU','MONTREAL','SANTORINI','ZANZIBAR','EDINBURGH','BUENOS AIRES','LISBON','PRAGUE','SEOUL','NAIROBI','HAVANA','MALDIVES','BANGALORE','NEW YORK','AMSTERDAM'] },
   sports: { label: 'Sports', words: ['BADMINTON','CRICKET','VOLLEYBALL','MARATHON','SKATEBOARD','SNOOKER','ARCHERY','GYMNASTICS','PENALTY KICK','SLAM DUNK','TRIATHLON','FENCING','KABADDI','SURFING','HAT TRICK','OFFSIDE','CHECKMATE','HOME RUN','POLE VAULT','WIMBLEDON','LONG JUMP','TABLE TENNIS'] },
   science: { label: 'Science', words: ['GRAVITY','MOLECULE','TELESCOPE','VOLCANO','ECLIPSE','NEUTRON','MITOCHONDRIA','MAGNETISM','ASTEROID','FOSSIL','HYDROGEN','GALAXY','CHROMOSOME','EVAPORATION','BLACK HOLE','OXYGEN','NEBULA','ELECTRON','SUPERNOVA','CATALYST','DNA HELIX','PHOTON'] },
-  tech: { label: 'Tech and AI', words: ['ALGORITHM','NEURAL NETWORK','TRANSFORMER','KEYBOARD','DATABASE','COMPILER','BLUETOOTH','SMARTPHONE','ENCRYPTION','DEBUGGER','FIREWALL','TOKENIZER','PIXEL','ROBOTICS','SPREADSHEET','OPEN SOURCE','BANDWIDTH','PROMPT','DATASET','JAVASCRIPT','PYTHON','LATENCY','GRADIENT','EMBEDDING'] },
-  f1: { label: 'Formula 1', words: ['PIT STOP','POLE POSITION','CHICANE','SLIPSTREAM','PADDOCK','MONACO','CHEQUERED FLAG','HAIRPIN','DOWNFORCE','SAFETY CAR','MONZA','SILVERSTONE','UNDERCUT','FASTEST LAP','PARC FERME','SUZUKA','FORMATION LAP','DRS ZONE','PIT WALL','GRAND PRIX','PODIUM','TELEMETRY'] },
+  nature: { label: 'Nature', words: ['RAINBOW','WATERFALL','MOUNTAIN','SUNFLOWER','THUNDERSTORM','SNOWFLAKE','FOREST','DESERT','ISLAND','GLACIER','MEADOW','CANYON','CORAL REEF','TORNADO','HURRICANE','PEBBLE','MOONLIGHT','SUNSET','SEASHELL','CACTUS','ACORN','MUSHROOM','LIGHTNING','BLOSSOM'] },
+  jobs: { label: 'Jobs', words: ['ASTRONAUT','FIREFIGHTER','DETECTIVE','CARPENTER','PILOT','DENTIST','FARMER','MAGICIAN','LIBRARIAN','PHOTOGRAPHER','ARCHITECT','PLUMBER','SCIENTIST','CHEF','ZOOKEEPER','NURSE','TEACHER','ENGINEER','MUSICIAN','PAINTER','BAKER','LIFEGUARD','JUDGE','MAIL CARRIER'] },
   home: { label: 'Around the house', words: ['UMBRELLA','TOOTHBRUSH','BACKPACK','NOTEBOOK','CANDLE','MIRROR','LANTERN','BICYCLE','SUITCASE','HEADPHONES','TELEVISION','WARDROBE','SCISSORS','BLANKET','KETTLE','PAINTBRUSH','SUNGLASSES','ENVELOPE','CALENDAR','DOORBELL','BOOKSHELF','TEACUP','ALARM CLOCK'] }
 };
 const CAT_KEYS = Object.keys(CATS);
 const ALL = CAT_KEYS.flatMap(c => CATS[c].words.map(w => ({ w, c })));
 const DEFAULTS = { mode: 'each', source: 'friends', category: 'any', turns: true, maxMisses: 6, rounds: 0 };
 const TEAM_IDS = ['a', 'b'];
-const AVATARS = [['fox', '🦊'], ['panda', '🐼'], ['tiger', '🐯'], ['frog', '🐸'], ['monkey', '🐵'], ['penguin', '🐧'], ['lion', '🦁'], ['koala', '🐨'], ['octopus', '🐙'], ['unicorn', '🦄'], ['dog', '🐶'], ['cat', '🐱'], ['owl', '🦉'], ['whale', '🐳'], ['bear', '🐻'], ['rabbit', '🐰'], ['chick', '🐥'], ['dragon', '🐲']];
+const AVATARS = [['boy1', '👦'], ['girl1', '👧'], ['boy2', '👦'], ['girl2', '👧'], ['child1', '🧒'], ['boy3', '👦'], ['girl3', '👧'], ['child2', '🧒'], ['baby', '👶'], ['astronaut', '🧑\u200d🚀'], ['ninja', '🥷'], ['student', '🧑\u200d🎓'], ['artist', '🧑\u200d🎨'], ['prince', '🤴'], ['princess', '👸'], ['singer', '🧑\u200d🎤'], ['detective', '🕵️'], ['farmer', '🧑\u200d🌾']];
 const AVATAR_KEYS = AVATARS.map(a => a[0]);
 // A word picked by players always comes with a category, so the guessers know where to start.
 function cleanLabel(s) {
@@ -92,6 +92,13 @@ function nextTurn(G, from) {
   for (let k = 1; k <= n; k++) { const id = G.order[((i + k) % n + n) % n]; if (g.includes(id)) return id; }
   return g[0];
 }
+// Every word is worth the same: 60 points spread across its letters, 40 for finishing it,
+// and 5 for each life left. If nobody solves it, whoever gave the word earns 50.
+const LETTER_POOL = 60, SOLVE_BONUS = 40, LIFE_BONUS = 5, SURVIVE_BONUS = 50;
+function letterSlots(w) { return [...w].filter(isLetter).length || 1; }
+function revealedSlots(w, g) { return [...w].filter(ch => isLetter(ch) && g.includes(ch)).length; }
+function poolShare(w, k) { return Math.round(LETTER_POOL * k / letterSlots(w)); }
+function finishBonus(G) { return SOLVE_BONUS + LIFE_BONUS * Math.max(0, G.settings.maxMisses - G.misses); }
 function addTeamPts(G, t, p) { if (!t) return; G.teamScores[t] = (G.teamScores[t] || 0) + p; G.roundTeamPts[t] = (G.roundTeamPts[t] || 0) + p; }
 function addPts(G, id, p) {
   if (!id) return;
@@ -137,8 +144,10 @@ function beginRound(G, rnd) {
 function endRound(G, result, solver, w) {
   G.status = 'over'; G.result = result; G.solver = solver || null; G.turn = null; G.answer = w;
   if (result === 'hanged') {
-    if (G.setter) addPts(G, G.setter, 30);
-    else if (teamsOn(G)) addTeamPts(G, G.pickTeam, 30);
+    if (teamsOn(G) && G.pickTeam) {
+      addTeamPts(G, G.pickTeam, SURVIVE_BONUS);
+      if (G.setter) { G.scores[G.setter] = (G.scores[G.setter] || 0) + SURVIVE_BONUS; G.roundPts[G.setter] = (G.roundPts[G.setter] || 0) + SURVIVE_BONUS; }
+    } else if (G.setter) addPts(G, G.setter, SURVIVE_BONUS);
     logIt(G, { k: 'hanged' });
   }
   G.history.push({ round: G.round, word: w, setter: G.setter, result, solver: solver || null, misses: G.misses, pickTeam: G.pickTeam });
@@ -167,23 +176,28 @@ function act(G0, a, by, rnd) {
     case 'guess': {
       const c = String(a.letter || '').toUpperCase();
       if (!canGuess(G, by) || c.length !== 1 || !isLetter(c) || G.guessed.includes(c)) return null;
+      const before = revealedSlots(word, G.guessed);
       G.guessed.push(c);
       const n = [...word].filter(x => x === c).length;
       if (n) {
-        addPts(G, by, 10 * n); logIt(G, { k: 'hit', by, c, n });
-        if (isSolved(word, G.guessed)) endRound(G, 'solved', by, word);
+        let p = poolShare(word, before + n) - poolShare(word, before);
+        const done = isSolved(word, G.guessed);
+        if (done) p += finishBonus(G);
+        addPts(G, by, p); logIt(G, { k: 'hit', by, c, n, p });
+        if (done) { endRound(G, 'solved', by, word); return G; }
       } else {
         G.misses++; logIt(G, { k: 'miss', by, c });
-        if (G.misses >= G.settings.maxMisses) endRound(G, 'hanged', null, word);
-        else if (G.settings.turns) G.turn = nextTurn(G, by);
+        if (G.misses >= G.settings.maxMisses) { endRound(G, 'hanged', null, word); return G; }
       }
+      // The turn passes after every guess, so everyone gets to play each round.
+      if (G.settings.turns) G.turn = nextTurn(G, by);
       return G;
     }
     case 'solve': {
       const w = normalize(a.word);
       if (!canGuess(G, by) || !w) return null;
       if (w === word) {
-        const p = 25 + 5 * hiddenCount(word, G.guessed);
+        const p = LETTER_POOL - poolShare(word, revealedSlots(word, G.guessed)) + finishBonus(G);
         G.guessed = [...new Set(G.guessed.concat(lettersOf(word)))];
         addPts(G, by, p); logIt(G, { k: 'solved', by, p });
         endRound(G, 'solved', by, word);
@@ -278,4 +292,4 @@ function act(G0, a, by, rnd) {
   return null;
 }
 
-export { AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };
+export { LETTER_POOL, SOLVE_BONUS, LIFE_BONUS, SURVIVE_BONUS, AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };

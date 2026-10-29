@@ -3,11 +3,12 @@
 Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
 
 - **Daily word**: the same word for everyone each day, with a shareable result grid.
-- **Practice**: endless words from eight categories, with streaks and stats.
+- **Practice**: endless words from eight kid-friendly categories, with streaks and stats.
+- **Fair scoring**: every word is worth the same, short or long. Uncovered letters share 60 points, finishing the word earns 40 more plus 5 per life left, and a word nobody solves earns 50 for whoever gave it. The turn passes after every guess.
 - **Pass and play**: 2 to 6 players on one device take turns picking words for each other.
 - **Online rooms**: create a game, send the link, and play live. You get turns, scores, reactions, nudges and a chat.
 - **Team battle (Red vs Blue)**: one team agrees on a word and its category in its private team chat, the other team guesses, then they swap. A live VS scoreboard tracks the score, and the game ends on a podium.
-- **3D avatars and animation**: every player picks a 3D animal avatar. Big moments get animations: a spotlight when it's your turn, counting scores, a wave across the tiles when the word is solved, and a crown for the winner. Motion is reduced when the device asks for it.
+- **3D avatars and animation**: every player picks a 3D cartoon kid avatar. Big moments get animations: a spotlight when it's your turn, counting scores, a wave across the tiles when the word is solved, and a crown for the winner. Motion is reduced when the device asks for it.
 
 ## How it works
 

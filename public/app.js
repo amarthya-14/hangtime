@@ -48,7 +48,7 @@ const params = new URLSearchParams(location.search);
 const S = {
   view: 'home', kind: null, solo: null, local: null, modal: null,
   setup: Object.assign({ teams: [] }, store.get('setup', { names: ['', ''], settings: { mode: 'each', source: 'friends', category: 'any', maxMisses: 6, rounds: 0 } })),
-  practiceCat: store.get('practiceCat', 'any'), solveOpen: false, reveal: false, showWord: false,
+  practiceCat: CATS[store.get('practiceCat', 'any')] ? store.get('practiceCat', 'any') : 'any', solveOpen: false, reveal: false, showWord: false,
   err: '', busy: false, invite: (params.get('g') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4), clear: []
 };
 let ON = null;
@@ -488,15 +488,15 @@ function renderHome() {
   return '<section class="home">' +
     (S.invite ? renderInvite() : '') +
     '<div class="hero">' +
-      '<div class="floaters" aria-hidden="true">' + ['fox', 'panda', 'unicorn', 'frog', 'owl', 'tiger'].map((k, i) => '<img class="fl f' + i + '" src="/avatars/' + k + '.png" alt="" draggable="false">').join('') + '</div>' +
+      '<div class="floaters" aria-hidden="true">' + ['astronaut', 'girl1', 'boy2', 'princess', 'ninja', 'child2'].map((k, i) => '<img class="fl f' + i + '" src="/avatars/' + k + '.png" alt="" draggable="false">').join('') + '</div>' +
       '<h1 class="logo" aria-label="Hangtime">' + tileRow('HANGTIME', 4) + '</h1>' +
       '<p class="lede">Guess the word one letter at a time before the drawing is finished. Play today’s word, practise, or start a game and send your friends the link.</p>' +
     '</div>' +
     '<div class="modes">' +
-      '<button class="mode" data-act="daily">' + art('owl') + '<span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
-      '<button class="mode" data-act="practice">' + art('fox') + '<span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
-      '<button class="mode mode-vs" data-act="create-teams">' + art('tiger', 'art-b') + art('lion') + '<span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
-      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '">' + art('panda') + '<span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
+      '<button class="mode" data-act="daily">' + art('student') + '<span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
+      '<button class="mode" data-act="practice">' + art('detective') + '<span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
+      '<button class="mode mode-vs" data-act="create-teams">' + art('boy1', 'art-b') + art('girl3') + '<span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
+      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '">' + art('baby') + '<span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
     '</div>' +
     '<div class="chips" role="group" aria-label="Practice category"><span class="eyebrow" style="margin-right:4px">Practice words</span>' +
       [['any', 'Mixed']].concat(CAT_KEYS.map(c => [c, CATS[c].label])).map(([v, l]) => '<button class="chip" data-act="pcat" data-v="' + v + '" aria-pressed="' + (S.practiceCat === v) + '">' + esc(l) + '</button>').join('') +
@@ -540,6 +540,7 @@ function settingsHTML(act, s, enabled, local) {
   '</div>';
 }
 function localAvatar(i) { const a = (S.setup.avatars || [])[i]; return AVATAR_KEYS.includes(a) ? a : AVATAR_KEYS[(i * 5) % AVATAR_KEYS.length]; }
+if (S.setup.settings && S.setup.settings.category !== 'any' && !CATS[S.setup.settings.category]) S.setup.settings.category = 'any';
 function localTeam(i) { return TEAM_IDS.includes(S.setup.teams[i]) ? S.setup.teams[i] : TEAM_IDS[i % 2]; }
 function renderSetup() {
   const n = S.setup.names;
@@ -716,7 +717,7 @@ function playersHTML(G, lobby, list) {
 function feedLine(G, e) {
   const n = '<b>' + esc(nameOf(G, e.by)) + '</b>';
   switch (e.k) {
-    case 'hit': return n + ' found ' + (e.n > 1 ? e.n + ' × ' : '') + esc(e.c);
+    case 'hit': return n + ' found ' + (e.n > 1 ? e.n + ' \u00d7 ' : '') + esc(e.c) + (e.p ? ' <span class="pts">+' + Number(e.p) + '</span>' : '');
     case 'miss': return n + ' tried ' + esc(e.c) + ', not in the word';
     case 'solved': return n + ' solved it (+' + Number(e.p || 0) + ')';
     case 'wrong': return n + ' guessed “' + esc(e.w) + '”, wrong';
@@ -808,11 +809,11 @@ function renderFinal(G) {
 function setWordForm(masked, heading, note) {
   return '<form class="panel setform" data-form="setword">' +
     '<h2>' + (heading || 'Pick a word for your friends') + '</h2>' + (note ? '<p class="muted small" style="margin:-6px 0 0">' + note + '</p>' : '') +
-    '<div><label class="lbl" for="sw-word">Word or short phrase</label><div class="row"><input id="sw-word" class="field big" type="' + (masked && !S.showWord ? 'password' : 'text') + '" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="e.g. PIT STOP">' +
+    '<div><label class="lbl" for="sw-word">Word or short phrase</label><div class="row"><input id="sw-word" class="field big" type="' + (masked && !S.showWord ? 'password' : 'text') + '" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="e.g. BUTTERFLY">' +
     (masked ? '<button type="button" class="btn" data-act="toggle-show">' + (S.showWord ? 'Hide' : 'Show') + '</button>' : '') + '</div></div>' +
     '<div><label class="lbl" for="sw-cat">Category <span class="req">required</span></label><input id="sw-cat" class="field" maxlength="24" autocomplete="off" placeholder="e.g. Movie">' +
       '<div class="chips catchips" role="group" aria-label="Category suggestions">' + CAT_SUGGEST.map(c => '<button type="button" class="chip" data-act="catchip" data-v="' + c + '">' + c + '</button>').join('') + '</div></div>' +
-    '<div><label class="lbl" for="sw-hint">Hint (optional)</label><input id="sw-hint" class="field" maxlength="60" placeholder="e.g. Happens during a race"></div>' +
+    '<div><label class="lbl" for="sw-hint">Hint (optional)</label><input id="sw-hint" class="field" maxlength="60" placeholder="e.g. Has colourful wings"></div>' +
     '<p class="err">' + esc(S.err) + '</p>' +
     '<div class="row"><button class="btn primary" type="submit">Lock it in</button><button type="button" class="btn" data-act="suggest">Suggest a word</button></div>' +
     '<p class="muted small" style="margin:0">3 to 24 letters, up to 3 words. Everyone sees the category and hint. Spaces, hyphens and apostrophes are shown for free.</p>' +
@@ -858,7 +859,7 @@ function renderLobby(G) {
       '<div style="margin-top:12px"><label class="lbl" for="nick-lobby">Your name in this game</label><div class="row"><input id="nick-lobby" class="field" maxlength="20" value="' + esc((G.nicks && G.nicks[ME.id]) || myNick()) + '" placeholder="Your name"><button class="btn" data-act="save-nick">Save</button></div>' +
       '<span class="lbl" style="margin-top:10px">Your avatar</span>' + avatarPicker(avatarKeyOf(G, ME.id), 'lobby-avatar') + '</div></div>' +
     '<div class="panel span"><h2>Settings</h2>' + (isHost ? '' : '<p class="muted small" style="margin:0">Only ' + esc(nameOf(G, G.host)) + ' can change these.</p>') + settingsHTML('setting', G.settings, isHost, false) +
-      (teamsOn(G) ? '<p class="muted small" style="margin:12px 0 0">Teams take turns: one team agrees on a word in its private chat, the other team guesses it, then they swap.</p>' : '') + '</div>' +
+      '<p class="rules">' + (teamsOn(G) ? 'Teams swap every round: one team agrees on a word and its category in its private chat, the other team guesses it.' : 'Everyone takes a turn giving the word. The turn passes after every guess.') + ' Every word is worth the same, short or long: up to 100 points, plus 5 for each life left.</p></div>' +
     '<div class="span">' + chatHTML(G) + '</div>' +
     '<div class="span start-row">' + (isHost
       ? '<button class="btn primary big" data-act="start"' + (teamsBad ? ' disabled' : '') + '>Start game</button>' + (teamsBad ? '<span class="muted small">Each team needs at least one player.</span>' : G.order.length < 2 && G.settings.source === 'friends' ? '<span class="muted small">With one player the words are random until a friend joins.</span>' : '')
@@ -915,7 +916,8 @@ function renderModal() {
       '<li>Guess the hidden word one letter at a time. Each wrong letter draws another part of the figure.</li>' +
       '<li>Solve the whole word whenever you think you know it. A wrong answer costs a life, the same as a wrong letter.</li>' +
       '<li>The daily word is the same for everyone and changes at midnight. Share your result to compare with friends.</li>' +
-      '<li>Playing online, each round one player picks the word. Guessers earn 10 points for each letter they uncover and 25 points, plus 5 for every hidden letter, for solving. If nobody solves it, the player who picked the word earns 30.</li>' +
+      '<li>Every word is worth the same, short or long. Letters you uncover share 60 points. Finishing the word earns 40 more, plus 5 for each life left. If nobody solves it, whoever gave the word earns 50.</li>' +
+      '<li>The turn passes after every guess, so everyone plays every round. Each player (or each team) takes a turn giving the word.</li>' +
       '<li>Team battle: Red vs Blue. One team agrees on a word and its category in its private chat, the other team guesses, then they swap. Team points decide the winner.</li>' +
       '<li>On a computer you can type letters on your keyboard.</li></ul>';
   } else if (S.modal === 'stats') {

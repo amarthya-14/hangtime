@@ -32,7 +32,8 @@ assert.equal(r.j.game.turn, idB);
 r = await post({ op: 'act', key: C, code, action: { t: 'guess', letter: 'P' } });
 assert.equal(r.j.refused, true);
 r = await post({ op: 'act', key: B, code, action: { t: 'guess', letter: 'P' } });
-assert.equal(r.j.game.shown, 'P?? ???P'); assert.equal(r.j.game.scores[idB], 20);
+assert.equal(r.j.game.shown, 'P?? ???P'); assert.equal(r.j.game.scores[idB], 17, '2 of 7 letters = 17 of the 60-point pool');
+assert.notEqual(r.j.game.turn, idB, 'the turn passes after a hit too');
 // unchanged version returns no game payload
 const v = r.j.game.version;
 r = await get({ code, key: B, v, hb: 1 });
@@ -108,11 +109,12 @@ assert.ok([ids[C], ids[D]].includes(bv.turn), 'a blue player guesses first');
 assert.equal((await post({ op: 'act', key: A, code: tc, action: { t: 'guess', letter: 'M' } })).j.refused, true);
 const firstKey = bv.turn === ids[C] ? C : D, secondKey = firstKey === C ? D : C;
 r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'guess', letter: 'O' } });
-assert.equal(r.j.game.teamScores.b, 10);
-r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'guess', letter: 'X' } });
-assert.equal(r.j.game.turn, ids[secondKey], 'turn passes within blue');
-r = await post({ op: 'act', key: secondKey, code: tc, action: { t: 'solve', word: 'monza' } });
-assert.equal(r.j.game.status, 'over'); assert.equal(r.j.game.teamScores.b, 10 + 25 + 5 * 4);
+assert.equal(r.j.game.teamScores.b, 12, '1 of 5 letters = 12');
+assert.equal(r.j.game.turn, ids[secondKey], 'turn passes within blue after a hit');
+r = await post({ op: 'act', key: secondKey, code: tc, action: { t: 'guess', letter: 'X' } });
+assert.equal(r.j.game.turn, ids[firstKey], 'and after a miss');
+r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'solve', word: 'monza' } });
+assert.equal(r.j.game.status, 'over'); assert.equal(r.j.game.teamScores.b, 12 + 48 + 40 + 5 * 5, 'rest of the pool + solve bonus + 5 per life left');
 r = await post({ op: 'act', key: A, code: tc, action: { t: 'next', round: 1 } });
 assert.equal(r.j.game.pickTeam, 'b', 'teams swap');
 // red player leaving does not end the game while red still has a player
@@ -127,20 +129,20 @@ let P = L.newGame('local', { host: 'p1', order: ['p1', 'p2', 'p3', 'p4'], names:
 P = L.act(P, { t: 'start' }, 'p1');
 assert.equal(P.status, 'playing'); assert.equal(P.pickTeam, 'a'); assert.ok(['p2', 'p4'].includes(P.turn));
 let guard = 0; while (P.status === 'playing' && guard++ < 30) { const w = L.wordOf(P); const miss = 'QXZJVKWYFB'.split('').find(c => !w.includes(c) && !P.guessed.includes(c)); P = L.act(P, { t: 'guess', letter: miss }, P.turn) || P; }
-assert.equal(P.result, 'hanged'); assert.equal(P.teamScores.a, 30, 'picking team scores when nobody solves');
+assert.equal(P.result, 'hanged'); assert.equal(P.teamScores.a, 50, 'picking team scores when nobody solves');
 let bad = L.newGame('local', { host: 'p1', order: ['p1', 'p2'], teams: { p1: 'a', p2: 'a' }, settings: { mode: 'teams' } });
 assert.equal(L.act(bad, { t: 'start' }, 'p1'), null, 'teams need a player each');
 console.log('TEAM TESTS PASSED');
 
 // ---------- categories, avatars, team battle ----------
-let V = (await post({ op: 'create', key: A, nick: 'Asha', avatar: 'panda', mode: 'teams' })).j;
+let V = (await post({ op: 'create', key: A, nick: 'Asha', avatar: 'girl1', mode: 'teams' })).j;
 assert.equal(V.game.settings.mode, 'teams', 'team battle starts in teams mode');
-assert.equal(V.game.avatars[V.game.me], 'panda', 'avatar stored');
+assert.equal(V.game.avatars[V.game.me], 'girl1', 'avatar stored');
 const vc = V.code;
 r = await post({ op: 'join', key: B, code: vc, nick: 'Ravi', avatar: '<img src=x>' });
 assert.equal(r.j.game.avatars[r.j.game.me], undefined, 'unknown avatars are ignored');
-r = await post({ op: 'nick', key: B, code: vc, nick: 'Ravi', avatar: 'tiger' });
-assert.equal(r.j.game.avatars[r.j.game.me], 'tiger', 'avatar can change in the lobby');
+r = await post({ op: 'nick', key: B, code: vc, nick: 'Ravi', avatar: 'ninja' });
+assert.equal(r.j.game.avatars[r.j.game.me], 'ninja', 'avatar can change in the lobby');
 await post({ op: 'act', key: A, code: vc, action: { t: 'start' } });
 r = await post({ op: 'act', key: A, code: vc, action: { t: 'setword', word: 'INCEPTION' } });
 assert.equal(r.j.refused, true, 'a word without a category is refused');
@@ -150,5 +152,23 @@ const guesserView = (await get({ code: vc, key: B, v: 0 })).j.game;
 assert.equal(guesserView.category, 'Movie', 'guessers see the category');
 for (const k of [A, B]) await post({ op: 'leave', key: k, code: vc });
 console.log('CATEGORY + AVATAR TESTS PASSED');
+
+// ---------- fairness: a word's value does not depend on its length ----------
+const play = (word, letters) => {
+  let G = L.newGame('local', { host: 'a', order: ['a', 'b'], settings: { source: 'friends' } });
+  G = L.act(G, { t: 'start' }, 'a'); G = L.act(G, { t: 'setword', word, category: 'Test' }, 'a');
+  for (const c of letters) G = L.act(G, { t: 'guess', letter: c }, G.turn) || G;
+  return G;
+};
+const shortWord = play('CAKE', ['C', 'A', 'K', 'E']), longWord = play('BLUEBERRY', ['B', 'L', 'U', 'E', 'R', 'Y']);
+assert.equal(shortWord.scores.b, longWord.scores.b, 'a solved 4-letter word scores the same as a solved 9-letter word');
+const partial = play('WATERMELON', ['W', 'A', 'T', 'E', 'R']);
+assert.ok(partial.scores.b < shortWord.scores.b, 'most of a long word unsolved scores less than a whole short word');
+let R3 = L.newGame('local', { host: 'a', order: ['a', 'b', 'c'], settings: { source: 'friends' } });
+R3 = L.act(R3, { t: 'start' }, 'a');
+const setters = [];
+for (let r = 1; r <= 3; r++) { setters.push(R3.setter); R3 = L.act(R3, { t: 'setword', word: 'CAKE', category: 'Food' }, R3.setter); R3 = L.act(R3, { t: 'solve', word: 'cake' }, R3.turn); R3 = L.act(R3, { t: 'next', round: r }, 'a'); }
+assert.deepEqual(setters, ['a', 'b', 'c'], 'with 3 players everyone gives a word once');
+console.log('FAIRNESS TESTS PASSED');
 
 
