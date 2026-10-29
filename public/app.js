@@ -1,5 +1,5 @@
 import {
-  TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker,
+  AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker,
   CATS, CAT_KEYS, ALL, isLetter, normalize, hiddenCount, hash32, validateWord, pickWord,
   wordOf, newGame, setSecret, canGuess, act
 } from './logic.js';
@@ -12,7 +12,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('hangtime:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('hangtime:' + k, JSON.stringify(v)); } catch (e) {} }
 };
-const catLabel = c => (CATS[c] && CATS[c].label) || 'Mixed';
+const catLabel = c => (CATS[c] && CATS[c].label) || (c ? String(c) : 'Mixed');
+const CAT_SUGGEST = ['Movie', 'Animal', 'Food', 'Place', 'Sport', 'Person', 'Thing', 'Song', 'Brand', 'Game'];
 const initials = n => (String(n || '?').trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2) || '?');
 const REACTS = ['👏', '😂', '😱', '🔥', '🤔', '💀'];
 const REACT_NAMES = { '👏': 'applause', '😂': 'laughing', '😱': 'shock', '🔥': 'fire', '🤔': 'thinking', '💀': 'skull' };
@@ -107,13 +108,31 @@ function nameOf(G, id) {
   if (G.kind === 'solo') return 'You';
   return (G.nicks && G.nicks[id]) || ('Player ' + ((G.order.indexOf(id) + 1) || ''));
 }
-function avatarHTML(G, id) {
+const avatarEmoji = k => (AVATARS.find(a => a[0] === k) || AVATARS[0])[1];
+function avatarKeyOf(G, id) {
+  const k = G.avatars && G.avatars[id];
+  if (AVATAR_KEYS.includes(k)) return k;
+  if (G.kind === 'solo') return myAvatar();
+  return AVATAR_KEYS[hash32(String(id)) % AVATAR_KEYS.length];
+}
+// Animal avatar on a soft tint; in teams mode the ring is the team colour.
+function avatarHTML(G, id, cls) {
   const idx = Math.max(0, G.order.indexOf(id));
   const online = G.kind === 'online' && ON && ON.online.has(id);
   const t = teamsOn(G) && G.teams && G.teams[id];
-  return '<span class="av" style="background:' + (t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')') + '" aria-hidden="true">' + esc(initials(nameOf(G, id))) + (online ? '<span class="dot"></span>' : '') + '</span>';
+  const color = t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')';
+  return '<span class="av av-e' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarEmoji(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + '</span>';
 }
 function myNick() { return String(store.get('nick', '') || '').slice(0, 20); }
+function myAvatar() {
+  let a = store.get('avatar', '');
+  if (!AVATAR_KEYS.includes(a)) { a = AVATAR_KEYS[Math.floor(Math.random() * AVATAR_KEYS.length)]; store.set('avatar', a); }
+  return a;
+}
+function avatarPicker(selected, act, extra) {
+  return '<div class="avpick" role="radiogroup" aria-label="Choose your avatar">' + AVATARS.map(([k, e]) =>
+    '<button type="button" class="avopt" role="radio" aria-checked="' + (k === selected) + '" aria-label="' + k + '" data-act="' + act + '" data-v="' + k + '"' + (extra || '') + '>' + e + '</button>').join('') + '</div>';
+}
 // The word as this viewer may see it: the full word in solo and pass and play; online, blanks ("?") unless you picked it or the round is over.
 function displayWord(G) { return G.kind === 'online' ? (G.answer || G.mine || G.shown || '') : wordOf(G); }
 
@@ -196,13 +215,13 @@ function needNick() {
   const n = myNick().trim();
   if (n) return n;
   toast('Add your name first so your friends know who you are.');
-  const i = $('#nick-home') || $('#nick-invite'); if (i) i.focus();
+  const i = $('#nick-invite') || $('#nick-home'); if (i) { i.focus(); i.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   return '';
 }
-async function createGame() {
+async function createGame(mode) {
   const nick = needNick(); if (!nick || S.busy) return;
   S.busy = true; render();
-  try { const j = await api('create', { nick }); openOnline(j.code, j.game); }
+  try { const j = await api('create', { nick, avatar: myAvatar(), mode: mode || 'each' }); openOnline(j.code, j.game); }
   catch (e) { toast(e.msg); }
   finally { S.busy = false; render(); }
 }
@@ -212,7 +231,7 @@ async function joinGame(raw, quiet) {
   const nick = quiet ? myNick().trim() || 'Player' : needNick();
   if (!nick || S.busy) return;
   S.busy = true; if (!quiet) render();
-  try { const j = await api('join', { code, nick }); S.invite = ''; openOnline(code, j.game); }
+  try { const j = await api('join', { code, nick, avatar: myAvatar() }); S.invite = ''; openOnline(code, j.game); }
   catch (e) {
     if (e.status === 404 || e.status === 410) recentRemove(code);
     if (quiet) { history.replaceState(null, '', location.pathname); S.view = 'home'; }
@@ -319,7 +338,7 @@ function startSolo(mode, forceNew) {
 function startLocal() {
   const names = S.setup.names.map((n, i) => String(n || '').trim().slice(0, 16) || ('Player ' + (i + 1)));
   const order = names.map((_, i) => 'p' + (i + 1));
-  const G = newGame('local', { host: 'p1', order, names: Object.fromEntries(order.map((id, i) => [id, names[i]])), teams: Object.fromEntries(order.map((id, i) => [id, localTeam(i)])), settings: Object.assign({}, S.setup.settings, { turns: true }) });
+  const G = newGame('local', { host: 'p1', order, names: Object.fromEntries(order.map((id, i) => [id, names[i]])), avatars: Object.fromEntries(order.map((id, i) => [id, localAvatar(i)])), teams: Object.fromEntries(order.map((id, i) => [id, localTeam(i)])), settings: Object.assign({}, S.setup.settings, { turns: true }) });
   closeOnline();
   const started = act(G, { t: 'start' }, 'p1');
   if (!started) { toast('Each team needs at least one player.'); return; }
@@ -420,6 +439,7 @@ function renderHome() {
     '<div class="modes">' +
       '<button class="mode" data-act="daily"><span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
       '<button class="mode" data-act="practice"><span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
+      '<button class="mode mode-vs" data-act="create-teams"><span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
       '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '"><span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
     '</div>' +
     '<div class="chips" role="group" aria-label="Practice category"><span class="eyebrow" style="margin-right:4px">Practice words</span>' +
@@ -429,7 +449,8 @@ function renderHome() {
   '</section>';
 }
 function renderInvite() {
-  return '<section class="panel online invite"><div><div class="eyebrow">You’re invited</div><h2>Join game <span class="code-chip">' + esc(S.invite) + '</span></h2><p class="muted" style="margin:0">Pick a name and jump in. No account needed.</p></div>' +
+  return '<section class="panel online invite"><div><div class="eyebrow">You’re invited</div><h2>Join game <span class="code-chip">' + esc(S.invite) + '</span></h2><p class="muted" style="margin:0">Pick an avatar and a name, then jump in. No account needed.</p></div>' +
+    avatarPicker(myAvatar(), 'pick-avatar') +
     '<form class="joinform" data-form="invite"><input id="nick-invite" class="field" maxlength="20" value="' + esc(myNick()) + '" placeholder="Your name" aria-label="Your name" data-input="nick" autocomplete="nickname"><button class="btn primary" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Joining…' : 'Join game') + '</button></form>' +
     '<button class="btn quiet" data-act="invite-dismiss" style="justify-self:start">Not now</button></section>';
 }
@@ -438,8 +459,9 @@ function renderOnlineCard() {
   return '<section class="panel online"><div><h2>Play online with friends</h2><p class="muted" style="margin:0">Create a game and send the link. Each round someone picks a word and everyone else races to save the stick figure. Works on any phone or laptop, no sign-up.</p></div>' +
     '<div class="online-grid">' +
       '<div><label class="lbl" for="nick-home">Your name in games</label><input id="nick-home" class="field" maxlength="20" value="' + esc(myNick()) + '" placeholder="e.g. Amar" data-input="nick" autocomplete="nickname"></div>' +
-      '<div class="row"><button class="btn primary big" data-act="create"' + (S.busy ? ' disabled' : '') + ' style="flex:1">' + (S.busy ? 'Working…' : 'Create a game') + '</button></div>' +
+      '<div class="row"><button class="btn primary big" data-act="create"' + (S.busy ? ' disabled' : '') + ' style="flex:1">' + (S.busy ? 'Working\u2026' : 'Create a game') + '</button><button class="btn big btn-vs" data-act="create-teams"' + (S.busy ? ' disabled' : '') + ' style="flex:1">Team battle</button></div>' +
     '</div>' +
+    '<div><span class="lbl">Your avatar</span>' + avatarPicker(myAvatar(), 'pick-avatar') + '</div>' +
     '<form class="joinform" data-form="join"><input id="join-code" class="field code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Game code"><button class="btn" type="submit">Join with code</button></form>' +
     (rec.length ? '<div><div class="eyebrow" style="margin-bottom:8px">Your recent games</div><ul class="games">' + rec.map(r => '<li><span class="code-chip">' + esc(r.code) + '</span><span class="g-info">Opened ' + esc(timeAgo(r.t)) + '</span><button class="btn" data-act="join-open" data-code="' + esc(r.code) + '">Rejoin</button></li>').join('') + '</ul></div>' : '') +
   '</section>';
@@ -453,7 +475,7 @@ function settingsHTML(act, s, enabled, local) {
   const cats = [['any', 'Mixed']].concat(CAT_KEYS.map(c => [c, CATS[c].label]));
   const teams = s.mode === 'teams';
   return '<div class="settings">' +
-    '<div class="setting"><span class="lbl">Play as</span>' + seg(act, 'mode', s.mode || 'each', [['each', 'Every player for themselves'], ['teams', 'Two teams']], enabled) + '</div>' +
+    '<div class="setting"><span class="lbl">Play as</span>' + seg(act, 'mode', s.mode || 'each', [['each', 'Every player for themselves'], ['teams', 'Team battle: Red vs Blue']], enabled) + '</div>' +
     '<div class="setting"><span class="lbl">Who picks the words</span>' + seg(act, 'source', s.source, [['friends', teams ? 'Teams pick for each other' : 'Players take turns'], ['random', 'Random words']], enabled) + '</div>' +
     (s.source === 'random' ? '<div class="setting"><span class="lbl">Category</span>' + seg(act, 'category', s.category, cats, enabled) + '</div>' : '') +
     (local ? '' : '<div class="setting"><span class="lbl">Guessing</span>' + seg(act, 'turns', s.turns, [[true, 'One at a time'], [false, 'Everyone at once']], enabled) + '</div>') +
@@ -461,14 +483,15 @@ function settingsHTML(act, s, enabled, local) {
     '<div class="setting"><span class="lbl">Rounds</span>' + seg(act, 'rounds', s.rounds, [[0, teams ? '4' : s.source === 'friends' ? 'One each' : '5'], [3, '3'], [5, '5'], [8, '8']].filter((x, i) => !(i === 2 && (teams || s.source !== 'friends'))), enabled) + '</div>' +
   '</div>';
 }
+function localAvatar(i) { const a = (S.setup.avatars || [])[i]; return AVATAR_KEYS.includes(a) ? a : AVATAR_KEYS[(i * 5) % AVATAR_KEYS.length]; }
 function localTeam(i) { return TEAM_IDS.includes(S.setup.teams[i]) ? S.setup.teams[i] : TEAM_IDS[i % 2]; }
 function renderSetup() {
   const n = S.setup.names;
   const teamsBad = S.setup.settings.mode === 'teams' && (!n.some((_, i) => localTeam(i) === 'a') || !n.some((_, i) => localTeam(i) === 'b'));
   return '<section class="setup"><div class="panel">' +
-    '<h2>Pass and play</h2><p class="muted" style="margin:0 0 14px">One device, 2 to 6 players. Each round one player picks a word while the others look away, then the rest take turns guessing.</p>' +
+    '<h2>Pass and play</h2><p class="muted" style="margin:0 0 14px">One device, 2 to 6 players. Each round one player picks a word while the others look away, then the rest take turns guessing. Tap an avatar to change it.</p>' +
     '<div class="names">' + n.map((v, i) =>
-      '<div class="row"><span class="av" style="background:' + (S.setup.settings.mode === 'teams' ? TEAM[localTeam(i)].color : 'var(--p' + (i + 1) + ')') + '" aria-hidden="true">' + (i + 1) + '</span><input id="pn-' + i + '" class="field" maxlength="16" value="' + esc(v) + '" placeholder="Player ' + (i + 1) + '" aria-label="Player ' + (i + 1) + ' name" data-input="pname" data-i="' + i + '">' +
+      '<div class="row"><button type="button" class="av av-e av-btn" style="--avc:' + (S.setup.settings.mode === 'teams' ? TEAM[localTeam(i)].color : 'var(--p' + (i + 1) + ')') + '" data-act="lavatar" data-i="' + i + '" aria-label="Change player ' + (i + 1) + '\u2019s avatar">' + avatarEmoji(localAvatar(i)) + '</button><input id="pn-' + i + '" class="field" maxlength="16" value="' + esc(v) + '" placeholder="Player ' + (i + 1) + '" aria-label="Player ' + (i + 1) + ' name" data-input="pname" data-i="' + i + '">' +
       (S.setup.settings.mode === 'teams' ? '<button class="team-chip t-' + localTeam(i) + '" data-act="lteam" data-i="' + i + '" aria-label="Player ' + (i + 1) + ' is on the ' + teamName(localTeam(i)) + '. Switch team">' + TEAM[localTeam(i)].name + '</button>' : '') +
       (n.length > 2 ? '<button class="icon-btn" data-act="pdel" data-i="' + i + '" aria-label="Remove player ' + (i + 1) + '">' + ICON.close + '</button>' : '') + '</div>').join('') + '</div>' +
     (n.length < 6 ? '<div style="margin-top:10px"><button class="btn" data-act="padd">Add a player</button></div>' : '') +
@@ -565,6 +588,7 @@ function boardShell(o) {
   const won = ended && G.result === 'solved', lost = ended && G.result === 'hanged';
   return '<section class="board' + (o.rail ? ' has-rail' : '') + '"><div class="play">' +
     '<div class="roundline">' + o.eyebrow + '</div>' +
+    (teamsOn(G) && G.pickTeam ? vsBanner(G) : '') +
     '<div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureSVG(G, o.key) + '</div></div>' +
     livesHTML(G) +
     (o.clue ? '<div class="clue">' + o.clue + '</div>' : '') +
@@ -582,7 +606,7 @@ function renderSolo() {
   const { G, mode } = S.solo;
   const word = wordOf(G), key = gameKey(G), over = G.status === 'over';
   const eyebrow = '<span class="eyebrow">' + (mode === 'daily' ? 'Daily · #' + dayNumber(G.daily) : 'Practice') + '</span>';
-  const clue = 'Category · <b>' + esc(catLabel(G.category)) + '</b>';
+  const clue = '<span class="cat-chip"><span class="eyebrow">Category</span><b>' + esc(catLabel(G.category)) + '</b></span>';
   let status = '', below = '';
   if (!over) {
     const left = hiddenCount(word, G.guessed);
@@ -607,9 +631,9 @@ function shareText(G) {
   return head + '\n' + res + '\n' + seq + '\n' + location.origin;
 }
 function clueFor(G) {
-  if (teamsOn(G) && G.pickTeam && G.setter) return G.hint ? 'Hint from the ' + teamName(G.pickTeam) + ': <b>\u201c' + esc(G.hint) + '\u201d</b>' : 'The ' + teamName(G.pickTeam) + ' left no hint';
-  if (G.setter) return G.hint ? 'Hint from ' + esc(nameOf(G, G.setter)) + ': <b>“' + esc(G.hint) + '”</b>' : esc(nameOf(G, G.setter)) + ' left no hint';
-  return 'Category · <b>' + esc(catLabel(G.category)) + '</b>';
+  const from = !G.setter ? 'Random word' : teamsOn(G) && G.pickTeam ? 'From the ' + teamName(G.pickTeam) : 'From ' + esc(nameOf(G, G.setter));
+  return '<span class="cat-chip"><span class="eyebrow">Category</span><b>' + esc(catLabel(G.category)) + '</b></span><span class="clue-from">' + from + '</span>' +
+    (G.hint ? '<span class="clue-hint">Hint: <b>\u201c' + esc(G.hint) + '\u201d</b></span>' : '');
 }
 function roundEyebrow(G) {
   return '<span class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + (teamsOn(G) && G.pickTeam ? ' \u00b7 ' + TEAM[G.pickTeam].name + ' picks, ' + TEAM[otherTeam(G.pickTeam)].name + ' guesses' : '') + '</span>' + (G.kind === 'online' ? '<span class="code-chip">' + esc(G.code) + '</span>' : '');
@@ -648,11 +672,18 @@ function feedLine(G, e) {
     default: return '';
   }
 }
-function teamScoresHTML(G) {
-  return '<div class="teamscores">' + TEAM_IDS.map(t => {
-    const role = G.pickTeam && !['done', 'lobby'].includes(G.status) ? (G.pickTeam === t ? 'Picking' : 'Guessing') : 'Score';
-    return '<div class="ts t-' + t + '"><span class="eyebrow"><span class="team-dot"></span>' + TEAM[t].name + ' · ' + role + '</span><b>' + ((G.teamScores && G.teamScores[t]) || 0) + '</b></div>';
-  }).join('') + '</div>';
+function vsBanner(G, compact) {
+  const live = G.pickTeam && !['done', 'lobby'].includes(G.status);
+  const ts = G.teamScores || { a: 0, b: 0 };
+  const side = t => {
+    const m = membersOf(G, t);
+    const role = live ? (G.pickTeam === t ? 'Giving the word' : 'Guessing') : (G.status === 'done' && ts[t] > ts[otherTeam(t)] ? 'Winners' : '');
+    return '<div class="vs-side t-' + t + (live && G.pickTeam === t ? ' giving' : '') + (live && G.pickTeam !== t ? ' guessing' : '') + '">' +
+      '<div class="vs-head"><span class="vs-name">' + TEAM[t].name + '</span>' + (role ? '<span class="vs-role">' + role + '</span>' : '') + '</div>' +
+      '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id)).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
+      '<b class="vs-score">' + (ts[t] || 0) + '</b></div></div>';
+  };
+  return '<div class="vs' + (compact ? ' compact' : '') + '" role="group" aria-label="Red ' + (ts.a || 0) + ', Blue ' + (ts.b || 0) + '">' + side('a') + '<div class="vs-mid" aria-hidden="true">VS</div>' + side('b') + '</div>';
 }
 function chatHTML(G) {
   if (G.kind !== 'online' || !ON) return '';
@@ -668,7 +699,7 @@ function chatHTML(G) {
 function railHTML(G) {
   const items = G.log.slice(-8).reverse().map(e => feedLine(G, e)).filter(Boolean);
   const reacts = G.kind === 'online';
-  return (teamsOn(G) ? teamScoresHTML(G) : '') + chatHTML(G) +
+  return chatHTML(G) +
     '<div class="card"><div class="card-h"><span class="eyebrow">' + (teamsOn(G) ? 'Players' : 'Scores') + '</span></div>' + playersHTML(G) + '</div>' +
     (reacts ? '<div class="card"><span class="eyebrow">React</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '" aria-label="Send ' + REACT_NAMES[e] + '">' + e + '</button>').join('') + '</div></div>' : '') +
     '<div class="card"><div class="card-h"><span class="eyebrow">Activity</span></div>' + (items.length ? '<ul class="feed">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '<p class="muted small" style="margin:0">Moves show up here.</p>') + '</div>';
@@ -703,7 +734,7 @@ function renderFinal(G) {
   if (teamsOn(G)) {
     const ts = G.teamScores || { a: 0, b: 0 };
     title = ts.a === ts.b ? 'The teams are tied' : 'The ' + teamName(ts.a > ts.b ? 'a' : 'b') + ' wins';
-    teamBlock = teamScoresHTML(G) + (ids.length && top > 0 ? '<p class="muted" style="margin:0">Most points: <b style="color:var(--ink)">' + esc(nameOf(G, ids[0])) + '</b> with ' + top + '</p>' : '');
+    teamBlock = vsBanner(G) + (ids.length && top > 0 ? '<p class="muted" style="margin:0">Most points: <b style="color:var(--ink)">' + esc(nameOf(G, ids[0])) + '</b> with ' + top + '</p>' : '');
   } else {
     const winners = ids.filter(id => (G.scores[id] || 0) === top);
     title = !ids.length ? 'Game over' : winners.length > 1 ? 'A tie between ' + winners.map(id => esc(nameOf(G, id))).join(' and ') : esc(nameOf(G, winners[0])) + ' wins';
@@ -720,10 +751,12 @@ function setWordForm(masked, heading, note) {
     '<h2>' + (heading || 'Pick a word for your friends') + '</h2>' + (note ? '<p class="muted small" style="margin:-6px 0 0">' + note + '</p>' : '') +
     '<div><label class="lbl" for="sw-word">Word or short phrase</label><div class="row"><input id="sw-word" class="field big" type="' + (masked && !S.showWord ? 'password' : 'text') + '" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="e.g. PIT STOP">' +
     (masked ? '<button type="button" class="btn" data-act="toggle-show">' + (S.showWord ? 'Hide' : 'Show') + '</button>' : '') + '</div></div>' +
+    '<div><label class="lbl" for="sw-cat">Category <span class="req">required</span></label><input id="sw-cat" class="field" maxlength="24" autocomplete="off" placeholder="e.g. Movie">' +
+      '<div class="chips catchips" role="group" aria-label="Category suggestions">' + CAT_SUGGEST.map(c => '<button type="button" class="chip" data-act="catchip" data-v="' + c + '">' + c + '</button>').join('') + '</div></div>' +
     '<div><label class="lbl" for="sw-hint">Hint (optional)</label><input id="sw-hint" class="field" maxlength="60" placeholder="e.g. Happens during a race"></div>' +
     '<p class="err">' + esc(S.err) + '</p>' +
     '<div class="row"><button class="btn primary" type="submit">Lock it in</button><button type="button" class="btn" data-act="suggest">Suggest a word</button></div>' +
-    '<p class="muted small" style="margin:0">3 to 24 letters, up to 3 words. Spaces, hyphens and apostrophes are shown to everyone.</p>' +
+    '<p class="muted small" style="margin:0">3 to 24 letters, up to 3 words. Everyone sees the category and hint. Spaces, hyphens and apostrophes are shown for free.</p>' +
   '</form>';
 }
 function renderLocal() {
@@ -733,7 +766,7 @@ function renderLocal() {
     const head = '<div class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + '</div>';
     if (teamsOn(G)) {
       const tn = teamName(G.pickTeam), on = teamName(otherTeam(G.pickTeam));
-      if (!S.reveal) return '<section class="setword center">' + head + '<h2>Pass the device to the ' + tn + '</h2><p class="muted" style="margin:0">The ' + on + ' looks away while the ' + tn + ' huddles and agrees on a word.</p><div class="row" style="justify-content:center"><button class="btn primary big" data-act="reveal">We’re the ' + tn + '</button><button class="btn" data-act="random-word">Use a random word</button></div></section>';
+      if (!S.reveal) return '<section class="setword center">' + head + vsBanner(G) + '<h2>Pass the device to the ' + tn + '</h2><p class="muted" style="margin:0">The ' + on + ' looks away while the ' + tn + ' huddles and agrees on a word.</p><div class="row" style="justify-content:center"><button class="btn primary big" data-act="reveal">We’re the ' + tn + '</button><button class="btn" data-act="random-word">Use a random word</button></div></section>';
       return '<section class="setword">' + head + setWordForm(true, 'Pick a word for the ' + on, 'Talk it over quietly, then lock it in.') + '</section>';
     }
     const nm = esc(nameOf(G, G.setter));
@@ -750,7 +783,7 @@ function lobbyPlayers(G) {
   const mine = G.teams[ME.id];
   return '<div class="teamcols">' + TEAM_IDS.map(t => {
     const m = membersOf(G, t);
-    return '<div class="teamcol t-' + t + '"><div class="teamcol-h"><span class="team-dot"></span>' + TEAM[t].name + ' <span class="count">' + m.length + '</span></div>' +
+    return (t === 'b' ? '<div class="vs-mid lobby-vs" aria-hidden="true">VS</div>' : '') + '<div class="teamcol t-' + t + '"><div class="teamcol-h"><span class="team-dot"></span>' + TEAM[t].name + ' <span class="count">' + m.length + '</span></div>' +
       (m.length ? playersHTML(G, true, m) : '<p class="muted small" style="margin:6px 0">Nobody yet</p>') +
       (mine !== t ? '<button class="btn quiet" data-act="team" data-team="' + t + '">Join ' + TEAM[t].name + '</button>' : '') + '</div>';
   }).join('') + '</div>' + (G.host === ME.id && G.order.length > 1 ? '<button class="btn" data-act="shuffle" style="margin-top:10px">Shuffle teams</button>' : '');
@@ -763,7 +796,8 @@ function renderLobby(G) {
       '<p class="muted" style="margin:0 0 12px">Send friends the link, or have them open Hangtime and enter this code.</p>' +
       '<div class="row"><button class="btn primary" data-act="invite">' + ICON.share + 'Invite friends</button><button class="btn" data-act="copy-code">' + ICON.copy + 'Copy link</button></div></div>' +
     '<div class="panel"><h2>Players <span class="count">' + G.order.length + '</span></h2>' + lobbyPlayers(G) +
-      '<div style="margin-top:12px"><label class="lbl" for="nick-lobby">Your name in this game</label><div class="row"><input id="nick-lobby" class="field" maxlength="20" value="' + esc((G.nicks && G.nicks[ME.id]) || myNick()) + '" placeholder="Your name"><button class="btn" data-act="save-nick">Save</button></div></div></div>' +
+      '<div style="margin-top:12px"><label class="lbl" for="nick-lobby">Your name in this game</label><div class="row"><input id="nick-lobby" class="field" maxlength="20" value="' + esc((G.nicks && G.nicks[ME.id]) || myNick()) + '" placeholder="Your name"><button class="btn" data-act="save-nick">Save</button></div>' +
+      '<span class="lbl" style="margin-top:10px">Your avatar</span>' + avatarPicker(avatarKeyOf(G, ME.id), 'lobby-avatar') + '</div></div>' +
     '<div class="panel span"><h2>Settings</h2>' + (isHost ? '' : '<p class="muted small" style="margin:0">Only ' + esc(nameOf(G, G.host)) + ' can change these.</p>') + settingsHTML('setting', G.settings, isHost, false) +
       (teamsOn(G) ? '<p class="muted small" style="margin:12px 0 0">Teams take turns: one team agrees on a word in its private chat, the other team guesses it, then they swap.</p>' : '') + '</div>' +
     '<div class="span">' + chatHTML(G) + '</div>' +
@@ -787,7 +821,7 @@ function renderOnline() {
   if (G.status === 'setting') {
     if (picker) {
       const form = teams ? setWordForm(false, 'Pick a word for the ' + teamName(otherTeam(G.pickTeam)), 'Agree on it in your team chat. Anyone on your team can lock it in.') : setWordForm(false);
-      return '<section class="board has-rail"><div class="play"><div class="roundline">' + roundEyebrow(G) + '</div><div class="setword">' + form + '</div></div><aside class="rail">' + railHTML(G) + '</aside></section>';
+      return '<section class="board has-rail"><div class="play"><div class="roundline">' + roundEyebrow(G) + '</div>' + (teams ? vsBanner(G) : '') + '<div class="setword">' + form + '</div></div><aside class="rail">' + railHTML(G) + '</aside></section>';
     }
     const who = teams ? 'The ' + teamName(G.pickTeam) + ' is' : esc(nameOf(G, G.setter)) + ' is';
     const pickers = teams ? membersOf(G, G.pickTeam) : [G.setter];
@@ -823,6 +857,7 @@ function renderModal() {
       '<li>Solve the whole word whenever you think you know it. A wrong answer costs a life, the same as a wrong letter.</li>' +
       '<li>The daily word is the same for everyone and changes at midnight. Share your result to compare with friends.</li>' +
       '<li>Playing online, each round one player picks the word. Guessers earn 10 points for each letter they uncover and 25 points, plus 5 for every hidden letter, for solving. If nobody solves it, the player who picked the word earns 30.</li>' +
+      '<li>Team battle: Red vs Blue. One team agrees on a word and its category in its private chat, the other team guesses, then they swap. Team points decide the winner.</li>' +
       '<li>On a computer you can type letters on your keyboard.</li></ul>';
   } else if (S.modal === 'stats') {
     const d = STATS.dist || {};
@@ -832,6 +867,9 @@ function renderModal() {
       '<div class="eyebrow" style="margin-top:18px">Misses per solved word</div><div class="dist">' +
       rows.map(r => '<div class="dist-row"><span>' + (r === 'x' ? '✕' : r) + '</span><span class="dist-bar' + (STATS.last === r ? ' hl' : '') + '" style="width:' + Math.max(8, Math.round((d[r] || 0) / max * 100)) + '%">' + (d[r] || 0) + '</span></div>').join('') +
       '</div><p class="muted small" style="margin:12px 0 0">Counts daily and practice words on this device. ✕ means out of lives.</p>';
+  } else if (S.modal && S.modal.avatarFor != null) {
+    const i = S.modal.avatarFor;
+    body = '<h2>Pick an avatar</h2><p class="muted small" style="margin:-6px 0 12px">For ' + esc(String(S.setup.names[i] || '').trim() || 'Player ' + (i + 1)) + '</p>' + avatarPicker(localAvatar(i), 'lavatar-pick', ' data-i="' + i + '"');
   } else if (S.modal && S.modal.copy) {
     body = '<h2>Copy this</h2><p class="muted small">Your browser blocked automatic copying. Select the text and copy it.</p><textarea id="copy-area" readonly>' + esc(S.modal.copy) + '</textarea>';
   }
@@ -885,7 +923,7 @@ document.addEventListener('click', e => {
     case 'local-setup': S.view = 'local-setup'; render(); break;
     case 'local-resume': { const L = store.get('local', null); if (L) { closeOnline(); S.local = { G: L }; S.kind = 'local'; S.view = 'game'; S.reveal = false; render(); } break; }
     case 'padd': if (S.setup.names.length < 6) { S.setup.names.push(''); store.set('setup', S.setup); render(); } break;
-    case 'pdel': { const i = Number(el.dataset.i); S.setup.names.splice(i, 1); S.setup.teams.splice(i, 1); store.set('setup', S.setup); render(); break; }
+    case 'pdel': { const i = Number(el.dataset.i); S.setup.names.splice(i, 1); S.setup.teams.splice(i, 1); (S.setup.avatars || []).splice(i, 1); store.set('setup', S.setup); render(); break; }
     case 'lsetting': { const k = el.dataset.k; let v = el.dataset.v; if (k === 'maxMisses' || k === 'rounds') v = Number(v); S.setup.settings[k] = v; store.set('setup', S.setup); render(); break; }
     case 'local-start': startLocal(); break;
     case 'reveal': S.reveal = true; S.err = ''; render(); { const i = $('#sw-word'); if (i) i.focus(); } break;
@@ -899,6 +937,16 @@ document.addEventListener('click', e => {
     case 'again': dispatch({ t: 'again' }); break;
     case 'share': if (S.solo) shareOrCopy({ text: shareText(S.solo.G) }, 'Result copied. Paste it to your friends.'); break;
     case 'create': createGame(); break;
+    case 'create-teams': createGame('teams'); break;
+    case 'pick-avatar': store.set('avatar', el.dataset.v); SND.play('pop'); render(); break;
+    case 'lobby-avatar': {
+      store.set('avatar', el.dataset.v); SND.play('pop');
+      if (ON && G) { const mine = ON; const nick = (G.nicks && G.nicks[ME.id]) || myNick() || 'Player'; api('nick', { code: ON.code, nick, avatar: el.dataset.v }).then(j => { if (ON === mine && j.game) { applyGame(j.game); scheduleRender(); } }, err => toast(err.msg)); }
+      break;
+    }
+    case 'lavatar': S.modal = { avatarFor: Number(el.dataset.i) }; renderModal(); break;
+    case 'lavatar-pick': { const i = Number(el.dataset.i); S.setup.avatars = S.setup.avatars || []; S.setup.avatars[i] = el.dataset.v; store.set('setup', S.setup); S.modal = null; SND.play('pop'); render(); break; }
+    case 'catchip': { const i = $('#sw-cat'); if (i) { i.value = el.dataset.v; i.focus(); } break; }
     case 'join-open': joinGame(el.dataset.code); break;
     case 'invite-dismiss': S.invite = ''; history.replaceState(null, '', location.pathname); render(); break;
     case 'invite': if (G) shareOrCopy({ title: 'Hangtime', text: 'Play Hangtime with me. Game code ' + G.code + '.', url: inviteUrl(G.code) }, 'Invite link copied'); break;
@@ -910,7 +958,7 @@ document.addEventListener('click', e => {
       const i = $('#nick-lobby'); const v = String(i ? i.value : '').trim().slice(0, 20);
       if (!v) { toast('Names can’t be empty.'); break; }
       store.set('nick', v);
-      if (ON) { const mine = ON; api('nick', { code: ON.code, nick: v }).then(j => { if (ON === mine && j.game) { applyGame(j.game); scheduleRender(); } toast('Name saved'); }, err => toast(err.msg)); }
+      if (ON) { const mine = ON; api('nick', { code: ON.code, nick: v, avatar: myAvatar() }).then(j => { if (ON === mine && j.game) { applyGame(j.game); scheduleRender(); } toast('Name saved'); }, err => toast(err.msg)); }
       break;
     }
     case 'skip': dispatch({ t: 'skip' }); break;
@@ -939,10 +987,11 @@ document.addEventListener('submit', e => {
   else if (kind === 'solve') { const v = $('#solve-input').value; if (!normalize(v)) return; S.clear.push('solve-input'); dispatch({ t: 'solve', word: v }); }
   else if (kind === 'setword') {
     const w = normalize($('#sw-word').value), hint = String($('#sw-hint').value || '').trim().slice(0, 60);
-    const err = validateWord(w);
+    const category = cleanLabel($('#sw-cat').value);
+    const err = validateWord(w) || (category ? '' : 'Add a category so the guessers know where to start.');
     if (err) { S.err = err; render(); const i = $('#sw-word'); if (i) i.focus(); return; }
-    S.err = ''; S.reveal = false; S.showWord = false; S.clear.push('sw-word', 'sw-hint');
-    dispatch({ t: 'setword', word: w, hint });
+    S.err = ''; S.reveal = false; S.showWord = false; S.clear.push('sw-word', 'sw-hint', 'sw-cat');
+    dispatch({ t: 'setword', word: w, hint, category });
   }
 });
 document.addEventListener('input', e => {

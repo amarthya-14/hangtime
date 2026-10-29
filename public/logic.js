@@ -13,6 +13,13 @@ const CAT_KEYS = Object.keys(CATS);
 const ALL = CAT_KEYS.flatMap(c => CATS[c].words.map(w => ({ w, c })));
 const DEFAULTS = { mode: 'each', source: 'friends', category: 'any', turns: true, maxMisses: 6, rounds: 0 };
 const TEAM_IDS = ['a', 'b'];
+const AVATARS = [['fox', '🦊'], ['panda', '🐼'], ['tiger', '🐯'], ['frog', '🐸'], ['monkey', '🐵'], ['penguin', '🐧'], ['lion', '🦁'], ['koala', '🐨'], ['octopus', '🐙'], ['unicorn', '🦄'], ['dog', '🐶'], ['cat', '🐱'], ['owl', '🦉'], ['whale', '🐳'], ['bear', '🐻'], ['rabbit', '🐰'], ['chick', '🐥'], ['dragon', '🐲']];
+const AVATAR_KEYS = AVATARS.map(a => a[0]);
+// A word picked by players always comes with a category, so the guessers know where to start.
+function cleanLabel(s) {
+  const t = String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
+  return t.length >= 2 ? t : '';
+}
 
 const isLetter = ch => ch >= 'A' && ch <= 'Z';
 function normalize(s) {
@@ -57,7 +64,7 @@ function newGame(kind, o) {
     round: 0, totalRounds: 0, setter: null, turn: null, secret: '', hint: '', category: '', len: 0,
     guessed: [], misses: 0, wrongWords: [], result: null, solver: null, answer: '',
     scores: {}, roundPts: {}, log: [], history: [], usedH: [], daily: o.daily || '', nicks: o.nicks || {}, version: 1,
-    teams: o.teams || {}, teamScores: { a: 0, b: 0 }, roundTeamPts: {}, pickTeam: null,
+    avatars: o.avatars || {}, teams: o.teams || {}, teamScores: { a: 0, b: 0 }, roundTeamPts: {}, pickTeam: null,
     createdAt: now, updatedAt: now
   };
 }
@@ -189,10 +196,11 @@ function act(G0, a, by, rnd) {
     }
     case 'setword': {
       const w = normalize(a.word);
-      if (G.status !== 'setting' || validateWord(w)) return null;
+      const cat = cleanLabel(a.category);
+      if (G.status !== 'setting' || validateWord(w) || !cat) return null;
       if (teamsOn(G) ? G.teams[by] !== G.pickTeam : by !== G.setter) return null;
       G.setter = by;
-      setSecret(G, w, a.hint, '');
+      setSecret(G, w, a.hint, cat);
       G.status = 'playing';
       G.turn = G.settings.turns ? (teamsOn(G) ? firstGuesser(G) : nextTurn(G, G.setter)) : null;
       logIt(G, { k: 'set', by });
@@ -270,4 +278,4 @@ function act(G0, a, by, rnd) {
   return null;
 }
 
-export { TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };
+export { AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };

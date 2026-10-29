@@ -20,7 +20,7 @@ r = await post({ op: 'act', key: B, code, action: { t: 'start' } });
 assert.equal(r.j.refused, true, 'only the host starts');
 r = await post({ op: 'act', key: A, code, action: { t: 'start' } });
 assert.equal(r.j.game.status, 'setting'); assert.equal(r.j.game.setter, idA);
-r = await post({ op: 'act', key: A, code, action: { t: 'setword', word: 'Pit Stop', hint: 'during a race' } });
+r = await post({ op: 'act', key: A, code, action: { t: 'setword', word: 'Pit Stop', hint: 'during a race', category: 'Test' } });
 assert.equal(r.j.game.mine, 'PIT STOP', 'setter sees the word');
 // a guesser's view never contains the word or the encoded secret
 r = await get({ code, key: B, v: 0 });
@@ -47,7 +47,7 @@ let F = (await post({ op: 'create', key: A, nick: 'Asha' })).j; const fc = F.cod
 await post({ op: 'join', key: B, code: fc, nick: 'Ravi' }); await post({ op: 'join', key: C, code: fc, nick: 'Kai' });
 await post({ op: 'act', key: A, code: fc, action: { t: 'settings', settings: { turns: false } } });
 await post({ op: 'act', key: A, code: fc, action: { t: 'start' } });
-await post({ op: 'act', key: A, code: fc, action: { t: 'setword', word: 'ALGORITHM' } });
+await post({ op: 'act', key: A, code: fc, action: { t: 'setword', word: 'ALGORITHM', category: 'Test' } });
 await Promise.all([
   post({ op: 'act', key: B, code: fc, action: { t: 'guess', letter: 'A' } }),
   post({ op: 'act', key: C, code: fc, action: { t: 'guess', letter: 'Z' } }),
@@ -97,8 +97,8 @@ assert.ok(!blue.chat.some(m => m.text.includes('MONZA')), 'blue never sees red c
 const sneaky = (await get({ code: tc, key: D, v: 0, ch: 'team-a' })).j;
 assert.equal(sneaky.chat, undefined, 'asking for the other team channel returns nothing');
 // any red player can lock it in; blue cannot
-assert.equal((await post({ op: 'act', key: C, code: tc, action: { t: 'setword', word: 'MONZA' } })).j.refused, true);
-r = await post({ op: 'act', key: B, code: tc, action: { t: 'setword', word: 'MONZA', hint: 'Temple of speed' } });
+assert.equal((await post({ op: 'act', key: C, code: tc, action: { t: 'setword', word: 'MONZA', category: 'Test' } })).j.refused, true);
+r = await post({ op: 'act', key: B, code: tc, action: { t: 'setword', word: 'MONZA', hint: 'Temple of speed', category: 'Test' } });
 assert.equal(r.j.game.status, 'playing'); assert.equal(r.j.game.mine, 'MONZA');
 assert.equal((await get({ code: tc, key: A, v: 0 })).j.game.mine, 'MONZA', 'whole red team sees the word');
 const bv = (await get({ code: tc, key: C, v: 0 })).j.game;
@@ -131,4 +131,24 @@ assert.equal(P.result, 'hanged'); assert.equal(P.teamScores.a, 30, 'picking team
 let bad = L.newGame('local', { host: 'p1', order: ['p1', 'p2'], teams: { p1: 'a', p2: 'a' }, settings: { mode: 'teams' } });
 assert.equal(L.act(bad, { t: 'start' }, 'p1'), null, 'teams need a player each');
 console.log('TEAM TESTS PASSED');
+
+// ---------- categories, avatars, team battle ----------
+let V = (await post({ op: 'create', key: A, nick: 'Asha', avatar: 'panda', mode: 'teams' })).j;
+assert.equal(V.game.settings.mode, 'teams', 'team battle starts in teams mode');
+assert.equal(V.game.avatars[V.game.me], 'panda', 'avatar stored');
+const vc = V.code;
+r = await post({ op: 'join', key: B, code: vc, nick: 'Ravi', avatar: '<img src=x>' });
+assert.equal(r.j.game.avatars[r.j.game.me], undefined, 'unknown avatars are ignored');
+r = await post({ op: 'nick', key: B, code: vc, nick: 'Ravi', avatar: 'tiger' });
+assert.equal(r.j.game.avatars[r.j.game.me], 'tiger', 'avatar can change in the lobby');
+await post({ op: 'act', key: A, code: vc, action: { t: 'start' } });
+r = await post({ op: 'act', key: A, code: vc, action: { t: 'setword', word: 'INCEPTION' } });
+assert.equal(r.j.refused, true, 'a word without a category is refused');
+r = await post({ op: 'act', key: A, code: vc, action: { t: 'setword', word: 'INCEPTION', category: '  Movie ' } });
+assert.equal(r.j.game.category, 'Movie', 'category is stored, trimmed');
+const guesserView = (await get({ code: vc, key: B, v: 0 })).j.game;
+assert.equal(guesserView.category, 'Movie', 'guessers see the category');
+for (const k of [A, B]) await post({ op: 'leave', key: k, code: vc });
+console.log('CATEGORY + AVATAR TESTS PASSED');
+
 

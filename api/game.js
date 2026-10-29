@@ -1,6 +1,6 @@
 // Online games: the server holds each game in Redis, applies every move with the shared rules,
 // and sends each player a view without the secret word (the word picker sees it, guessers see blanks).
-import { act, newGame, logIt, wordOf, isLetter, isPicker, teamsOn } from '../public/logic.js';
+import { act, newGame, logIt, wordOf, isLetter, isPicker, teamsOn, AVATAR_KEYS } from '../public/logic.js';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
@@ -54,6 +54,7 @@ function cleanNick(n) {
   if (!nick) throw new HttpError(400, 'Add your name first so your friends know who you are.');
   return nick;
 }
+const cleanAvatar = a => AVATAR_KEYS.includes(a) ? a : null;
 function genCode() {
   const A = 'BCDFGHJKLMNPQRSTVWXZ', b = new Uint32Array(4);
   crypto.getRandomValues(b);
@@ -101,7 +102,8 @@ async function handlePost(body) {
     const nick = cleanNick(body.nick);
     for (let i = 0; i < 8; i++) {
       const code = genCode();
-      const G = newGame('online', { code, host: id, order: [id], nicks: { [id]: nick }, teams: { [id]: 'a' } });
+      const avatar = cleanAvatar(body.avatar);
+      const G = newGame('online', { code, host: id, order: [id], nicks: { [id]: nick }, teams: { [id]: 'a' }, avatars: avatar ? { [id]: avatar } : {}, settings: body.mode === 'teams' ? { mode: 'teams' } : {} });
       G.scores[id] = 0;
       logIt(G, { k: 'join', by: id });
       const ok = await cmd('SET', gKey(code), JSON.stringify(G), 'NX', 'EX', String(TTL));
@@ -112,23 +114,27 @@ async function handlePost(body) {
   const code = cleanCode(body.code);
   if (op === 'join') {
     const nick = cleanNick(body.nick);
+    const avatar = cleanAvatar(body.avatar);
     const G = await update(code, G => {
       const inGame = G.order.includes(id);
       if (!inGame && G.status === 'done') throw new HttpError(410, 'That game has finished. Ask your friend for a new code.');
       if (!inGame && G.order.length >= MAX_PLAYERS) throw new HttpError(409, 'That game is full (' + MAX_PLAYERS + ' players).');
-      if (inGame && G.nicks[id] === nick) return null;
+      if (inGame && G.nicks[id] === nick && (!avatar || (G.avatars || {})[id] === avatar)) return null;
       const next = inGame ? JSON.parse(JSON.stringify(G)) : act(G, { t: 'join', id }, id);
       next.nicks = Object.assign({}, next.nicks, { [id]: nick });
+      if (avatar) next.avatars = Object.assign({}, next.avatars, { [id]: avatar });
       return next;
     });
     return { game: view(G, id) };
   }
   if (op === 'nick') {
     const nick = cleanNick(body.nick);
+    const avatar = cleanAvatar(body.avatar);
     const G = await update(code, G => {
-      if (!G.order.includes(id) || G.nicks[id] === nick) return null;
+      if (!G.order.includes(id) || (G.nicks[id] === nick && (!avatar || (G.avatars || {})[id] === avatar))) return null;
       const next = JSON.parse(JSON.stringify(G));
       next.nicks[id] = nick;
+      if (avatar) next.avatars = Object.assign({}, next.avatars, { [id]: avatar });
       return next;
     });
     return { game: view(G, id) };

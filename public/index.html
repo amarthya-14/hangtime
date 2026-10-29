@@ -110,15 +110,16 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .err:empty{display:none}
 
 /* home */
-.home{max-width:760px;margin:0 auto;display:grid;gap:30px}
+.home{max-width:900px;margin:0 auto;display:grid;gap:30px}
 .hero{display:grid;gap:16px;justify-items:start;padding-top:6px}
 .logo{display:flex;gap:6px;margin:0;flex-wrap:wrap}
 .logo .t{--size:clamp(34px,9.4vw,58px)}
 .logo .t.blank::after{content:"";position:absolute;left:22%;right:22%;bottom:16%;height:3px;border-radius:2px;background:var(--turn);animation:blink 1.1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 .lede{color:var(--muted);font-size:17px;max-width:54ch;margin:0}
-.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-@media (max-width:680px){.modes{grid-template-columns:1fr}}
+.modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:920px){.modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.modes{grid-template-columns:1fr}}
 .mode{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 18px;display:grid;gap:4px;align-content:start;transition:transform .15s,border-color .15s,box-shadow .15s;min-width:0}
 .mode:hover{transform:translateY(-2px);border-color:var(--ink);box-shadow:var(--shadow)}
 .mode b{font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-.015em;line-height:1.2;margin-top:4px}
@@ -270,8 +271,8 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .ts .eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.06em}
 .ts b{font-family:var(--font-display);font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
 .final .teamscores{max-width:420px}
-.teamcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media (max-width:420px){.teamcols{grid-template-columns:1fr}}
+.teamcols{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:start}
+.lobby-vs{align-self:center;font-size:18px !important;width:auto !important;height:auto !important;background:none !important;box-shadow:none !important;color:var(--muted) !important}
 .teamcol{border:1px solid var(--line);border-top:3px solid var(--team);border-radius:11px;padding:8px;display:grid;gap:4px;align-content:start;min-width:0}
 .teamcol-h{font-weight:700;display:flex;align-items:center;gap:4px;padding:2px 4px}
 .team-chip{flex:none;border:0;border-radius:99px;padding:6px 12px;font-weight:700;font-size:13px;background:var(--team);color:#fff}
@@ -285,6 +286,50 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .msgs li.muted{background:transparent;padding:0}
 .chatform{display:flex;gap:8px}
 .chatform .field{flex:1 1 auto}
+
+/* avatars */
+.av-e{background:color-mix(in srgb,var(--avc) 24%,var(--surface));box-shadow:inset 0 0 0 2px var(--avc);color:var(--ink);font-size:18px;line-height:1}
+.av-e.lg{width:52px;height:52px;font-size:30px}
+.av-btn{border:0;cursor:pointer;width:40px;height:40px;font-size:22px;flex:none;transition:transform .12s}
+.av-btn:hover{transform:scale(1.08)}
+.av-more{background:var(--sunk);color:var(--muted);font-size:12px;box-shadow:inset 0 0 0 1.5px var(--line)}
+.status .av-e{font-size:14px}
+.avpick{display:flex;flex-wrap:wrap;gap:6px}
+.avopt{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--sunk);font-size:22px;line-height:1;display:grid;place-items:center;transition:transform .1s,border-color .15s,background .15s}
+.avopt:hover{transform:translateY(-2px)}
+.avopt[aria-checked="true"]{border-color:var(--ink);background:var(--surface);box-shadow:0 0 0 2px var(--ink)}
+
+/* red vs blue */
+.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:stretch;gap:0;width:100%;max-width:620px;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);background:var(--surface)}
+.vs-side{padding:12px 14px;display:grid;gap:8px;min-width:0;background:linear-gradient(135deg,color-mix(in srgb,var(--team) 20%,var(--surface)),var(--surface) 75%);transition:opacity .3s}
+.vs-side.t-b{background:linear-gradient(225deg,color-mix(in srgb,var(--team) 20%,var(--surface)),var(--surface) 75%);text-align:right}
+.vs-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.vs-side.t-b .vs-head{justify-content:flex-end}
+.vs-name{font-family:var(--font-display);font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--team)}
+.vs-role{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.vs-side.giving .vs-role{color:var(--team)}
+.vs-body{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vs-side.t-b .vs-body{flex-direction:row-reverse}
+.vs-avs{display:flex;min-width:0}
+.vs-avs .av{width:34px;height:34px;font-size:19px;margin-right:-8px;border:2px solid var(--surface);box-sizing:content-box}
+.vs-side.t-b .vs-avs{flex-direction:row-reverse}
+.vs-side.t-b .vs-avs .av{margin-right:0;margin-left:-8px}
+.vs-score{font-family:var(--font-display);font-weight:800;font-size:38px;line-height:1;font-variant-numeric:tabular-nums}
+.vs-mid{display:grid;place-items:center;padding:0 10px;font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:.06em;color:var(--bg);background:var(--ink)}
+.vs.compact .vs-score{font-size:28px}
+.mode-vs{background:linear-gradient(135deg,color-mix(in srgb,var(--p2) 14%,var(--surface)),var(--surface) 45%,var(--surface) 55%,color-mix(in srgb,var(--p1) 14%,var(--surface)))}
+.vs-word.t-a{color:var(--p2)} .vs-word.t-b{color:var(--p1)}
+.btn-vs{background:linear-gradient(90deg,color-mix(in srgb,var(--p2) 22%,var(--surface)),color-mix(in srgb,var(--p1) 22%,var(--surface)))}
+
+/* category */
+.clue{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:center}
+.cat-chip{display:inline-flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.cat-chip b{font-family:var(--font-display);font-size:17px;color:var(--ink);letter-spacing:-.01em}
+.clue-from{font-size:13px;color:var(--muted)}
+.clue-hint{flex-basis:100%;text-align:center}
+.req{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--turn);margin-left:6px}
+.catchips{margin-top:8px}
+.catchips .chip{padding:4px 10px;font-size:13px}
 
 /* modal, toast */
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:20px;z-index:40;animation:fade .15s ease}
