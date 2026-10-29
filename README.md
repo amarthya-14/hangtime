@@ -1,0 +1,28 @@
+# Hangtime
+
+Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
+
+- **Daily word**: the same word for everyone each day, with a shareable result grid.
+- **Practice**: endless words from eight categories, with streaks and stats.
+- **Pass and play**: 2 to 6 players on one device take turns picking words for each other.
+- **Online rooms**: create a game, send the link, and play live. You get turns, scores, reactions, nudges and a chat.
+- **Teams**: Red and Blue. One team agrees on a word in its private team chat, the other team guesses, then they swap.
+
+## How it works
+
+- `public/` is a static site with no build step: `index.html` (styles), `app.js` (UI) and `logic.js` (game rules).
+- `logic.js` holds the game rules. The browser uses it for solo and pass and play, and the server uses it for online games, so the rules can't drift apart.
+- `api/game.js` is a single Vercel Function that owns online games. Games live in Upstash Redis and every move goes through a compare-and-set, so simultaneous guesses don't overwrite each other.
+- Each player gets a view of the game: guessers never receive the secret word, and each team receives only its own chat.
+- Clients poll about once a second. Players are identified by a random key kept in their browser; no accounts are needed.
+
+## Run it locally
+
+```bash
+npm test                  # end-to-end tests of the API against an in-memory Redis
+node test/dev-server.js   # http://localhost:4321, with an in-memory Redis
+```
+
+## Deploy
+
+The repo is connected to Vercel, so pushing to `main` deploys to production. Online play needs Upstash Redis from the Vercel Marketplace (`vercel integration add upstash/upstash-kv`). The function reads `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.

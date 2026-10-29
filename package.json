@@ -1,0 +1,11 @@
+{
+  "name": "hangtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
