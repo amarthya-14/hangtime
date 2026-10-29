@@ -13,7 +13,8 @@ const CAT_KEYS = Object.keys(CATS);
 const ALL = CAT_KEYS.flatMap(c => CATS[c].words.map(w => ({ w, c })));
 const DEFAULTS = { mode: 'each', source: 'friends', category: 'any', turns: true, maxMisses: 6, rounds: 0 };
 const TEAM_IDS = ['a', 'b'];
-const AVATARS = [['boy1', '👦'], ['girl1', '👧'], ['boy2', '👦'], ['girl2', '👧'], ['child1', '🧒'], ['boy3', '👦'], ['girl3', '👧'], ['child2', '🧒'], ['baby', '👶'], ['astronaut', '🧑\u200d🚀'], ['ninja', '🥷'], ['student', '🧑\u200d🎓'], ['artist', '🧑\u200d🎨'], ['prince', '🤴'], ['princess', '👸'], ['singer', '🧑\u200d🎤'], ['detective', '🕵️'], ['farmer', '🧑\u200d🌾']];
+// Full-body 3D chibi characters (Kenney Mini Characters, CC0), rendered to PNG in public/avatars.
+const AVATARS = [['f1', '👧'], ['m1', '👦'], ['f2', '👧'], ['m2', '👦'], ['f3', '👧'], ['m3', '👦'], ['f4', '👧'], ['m4', '👦'], ['f5', '👧'], ['m5', '👦'], ['f6', '👧'], ['m6', '👦']];
 const AVATAR_KEYS = AVATARS.map(a => a[0]);
 // A word picked by players always comes with a category, so the guessers know where to start.
 function cleanLabel(s) {

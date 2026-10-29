@@ -551,6 +551,33 @@ label.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin
 .pl.off .av{opacity:1}
 .pl.off .av img{opacity:.45}
 
+/* full-body chibi avatars */
+.av3d img{width:136%;height:136%;margin:-34% -18% 0;object-position:50% 100%}
+.av3d::before{bottom:-6%;height:20%;left:4%;right:4%}
+.pl .av3d{width:42px;height:42px}
+.vs-avs .av3d{width:48px;height:48px;margin-right:-8px}
+.vs-side.t-b .vs-avs .av3d{margin-left:-8px;margin-right:0}
+.avopt{width:60px;height:66px}
+.avopt img{width:58px;height:58px}
+.av-btn.av3d{width:48px;height:48px}
+.av3d.xl{width:96px;height:96px}
+.av3d.lg{width:64px;height:64px}
+.spot-av img{width:104px;height:104px}
+.fl{filter:drop-shadow(0 14px 12px rgba(0,0,0,.22))}
+.mode-art{width:78px;height:78px;right:-8px;top:-10px}
+.mode-art.art-b{width:64px;height:64px;right:44px;top:-2px}
+.status .av3d{width:30px;height:30px}
+.msgs .av3d.sm{width:30px;height:30px}
+
+.f0{width:112px;height:112px;top:-14px}
+.f1,.f2,.f5{width:82px;height:82px}
+.f3,.f4{width:70px;height:70px}
+@media (max-width:760px){.fl{width:64px!important;height:64px!important;top:4px!important}}
+
+.av3d .bubble img{width:22px!important;height:22px!important;margin:0!important;filter:none;transform:none;animation:none}
+
+.pl.off .av .bubble img{opacity:1}
+
 /* modal, toast */
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:20px;z-index:40;animation:fade .15s ease}
 @keyframes fade{from{opacity:0}}

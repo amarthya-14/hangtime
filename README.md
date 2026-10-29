@@ -8,7 +8,7 @@ Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
 - **Pass and play**: 2 to 6 players on one device take turns picking words for each other.
 - **Online rooms**: create a game, send the link, and play live. You get turns, scores, reactions, nudges and a chat.
 - **Team battle (Red vs Blue)**: one team agrees on a word and its category in its private team chat, the other team guesses, then they swap. A live VS scoreboard tracks the score, and the game ends on a podium.
-- **3D avatars and animation**: every player picks a 3D cartoon kid avatar. Big moments get animations: a spotlight when it's your turn, counting scores, a wave across the tiles when the word is solved, and a crown for the winner. Motion is reduced when the device asks for it.
+- **3D avatars and animation**: every player picks a full-body 3D chibi character, who jumps for joy when they win. Big moments get animations: a spotlight when it's your turn, counting scores, a wave across the tiles when the word is solved, and a crown for the winner. Motion is reduced when the device asks for it.
 
 ## How it works
 
@@ -31,4 +31,7 @@ The repo is connected to Vercel, so pushing to `main` deploys to production. Onl
 
 ## Credits
 
-The 3D avatars and reactions are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/` and `public/reactions/`, resized to 160 px, and pinned to commit `1ffb34c`.
+The full-body avatars are rendered from [Mini Characters](https://kenney.nl/assets/mini-characters-1) by Kenney (CC0); `public/avatars/` holds a standing and a jumping pose for each character.
+
+
+The 3D reaction icons and the crown are from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft, used under the MIT License. They're stored in `public/avatars/` and `public/reactions/`, resized to 160 px, and pinned to commit `1ffb34c`.

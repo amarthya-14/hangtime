@@ -133,16 +133,16 @@ function avatarKeyOf(G, id) {
   if (G.kind === 'solo') return myAvatar();
   return AVATAR_KEYS[hash32(String(id)) % AVATAR_KEYS.length];
 }
-// 3D animal (Fluent Emoji, MIT) on a soft tint; in teams mode the ring is the team colour.
-function avatarImg(k) {
-  return '<img src="/avatars/' + k + '.png" alt="" draggable="false" decoding="async" onerror="this.replaceWith(\'' + avatarEmoji(k) + '\')">';
+// Full-body 3D chibi kid (Kenney, CC0) standing on a soft shadow; 'cheer' is the jumping pose.
+function avatarImg(k, pose) {
+  return '<img src="/avatars/' + k + (pose === 'cheer' ? '-cheer' : '') + '.png" alt="" draggable="false" decoding="async" onerror="this.replaceWith(\'' + avatarEmoji(k) + '\')">';
 }
 function avatarHTML(G, id, cls, withBubble) {
   const idx = Math.max(0, G.order.indexOf(id));
   const online = G.kind === 'online' && ON && ON.online.has(id);
   const t = teamsOn(G) && G.teams && G.teams[id];
   const color = t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')';
-  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id)) + (online ? '<span class="dot"></span>' : '') + (withBubble ? bubbleHTML(id) : '') + '</span>';
+  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id), /\bcheer\b/.test(cls || '') ? 'cheer' : '') + (online ? '<span class="dot"></span>' : '') + (withBubble ? bubbleHTML(id) : '') + '</span>';
 }
 function myNick() { return String(store.get('nick', '') || '').slice(0, 20); }
 function myAvatar() {
@@ -210,8 +210,8 @@ function gameEffects(prev, G, me) {
     else { SND.play(setterSide ? 'win' : 'lose'); if (setterSide) confetti(80); }
   }
   if (prev.status !== 'done' && G.status === 'done' && G.kind !== 'solo') { SND.play('win'); confetti(140); }
-  if (me && G.status === 'playing' && G.settings.turns && G.turn === me && (prev.turn !== me || prev.status !== 'playing')) { spotlight(avatarKeyOf(G, me), 'Your turn!', 'Pick a letter or solve the word'); SND.play('tick'); }
-  if (me && G.status === 'setting' && isPicker(G, me) && !(prev.status === 'setting' && isPicker(prev, me))) { spotlight(avatarKeyOf(G, me), teamsOn(G) ? 'Your team gives the word' : 'You pick the word', teamsOn(G) ? 'Agree in team chat, then lock it in' : 'Choose a word and its category'); SND.play('tick'); }
+  if (me && G.status === 'playing' && G.settings.turns && G.turn === me && (prev.turn !== me || prev.status !== 'playing')) { spotlight(avatarKeyOf(G, me) + '-cheer', 'Your turn!', 'Pick a letter or solve the word'); SND.play('tick'); }
+  if (me && G.status === 'setting' && isPicker(G, me) && !(prev.status === 'setting' && isPicker(prev, me))) { spotlight(avatarKeyOf(G, me) + '-cheer', teamsOn(G) ? 'Your team gives the word' : 'You pick the word', teamsOn(G) ? 'Agree in team chat, then lock it in' : 'Choose a word and its category'); SND.play('tick'); }
 }
 
 // ---------- online ----------
@@ -468,7 +468,7 @@ function spotlight(avatarKey, title, sub) {
   document.querySelectorAll('.spot').forEach(n => n.remove());
   const el = document.createElement('div');
   el.className = 'spot'; el.setAttribute('role', 'status');
-  el.innerHTML = (avatarKey ? '<span class="spot-av">' + avatarImg(avatarKey) + '</span>' : '') + '<div><b>' + esc(title) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>';
+  el.innerHTML = (avatarKey ? '<span class="spot-av"><img src="/avatars/' + avatarKey + '.png" alt=""></span>' : '') + '<div><b>' + esc(title) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>';
   document.body.appendChild(el);
   setTimeout(() => el.classList.add('out'), 1800);
   setTimeout(() => el.remove(), 2300);
@@ -499,15 +499,15 @@ function renderHome() {
   return '<section class="home">' +
     (S.invite ? renderInvite() : '') +
     '<div class="hero">' +
-      '<div class="floaters" aria-hidden="true">' + ['astronaut', 'girl1', 'boy2', 'princess', 'ninja', 'child2'].map((k, i) => '<img class="fl f' + i + '" src="/avatars/' + k + '.png" alt="" draggable="false">').join('') + '</div>' +
+      '<div class="floaters" aria-hidden="true">' + ['f2-cheer', 'm3', 'f4', 'm4-cheer', 'f6', 'm1'].map((k, i) => '<img class="fl f' + i + '" src="/avatars/' + k + '.png" alt="" draggable="false">').join('') + '</div>' +
       '<h1 class="logo" aria-label="Hangtime">' + tileRow('HANGTIME', 4) + '</h1>' +
       '<p class="lede">Guess the word one letter at a time before the drawing is finished. Play today’s word, practise, or start a game and send your friends the link.</p>' +
     '</div>' +
     '<div class="modes">' +
-      '<button class="mode" data-act="daily">' + art('student') + '<span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
-      '<button class="mode" data-act="practice">' + art('detective') + '<span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
-      '<button class="mode mode-vs" data-act="create-teams">' + art('boy1', 'art-b') + art('girl3') + '<span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
-      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '">' + art('baby') + '<span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
+      '<button class="mode" data-act="daily">' + art('m5') + '<span class="eyebrow">Daily · #' + dayNumber(key) + '</span><b>Today’s word</b><span class="desc">One word for everyone, every day. Share your result and compare.</span>' + dailyState + '</button>' +
+      '<button class="mode" data-act="practice">' + art('f3') + '<span class="eyebrow">Practice · ' + esc(S.practiceCat === 'any' ? 'Mixed' : catLabel(S.practiceCat)) + '</span><b>Endless words</b><span class="desc">As many rounds as you like. Pick a category below.</span>' + (practice && practice.status === 'playing' ? '<span class="state"><span class="pip"></span>Continue your word</span>' : '') + '</button>' +
+      '<button class="mode mode-vs" data-act="create-teams">' + art('m2-cheer', 'art-b') + art('f5-cheer') + '<span class="eyebrow">Online \u00b7 2 or more players</span><b><span class="vs-word t-a">Red</span> vs <span class="vs-word t-b">Blue</span></b><span class="desc">One team gives the word and its category, the other team guesses. Each team plans in its own private chat.</span><span class="state"><span class="pip"></span>Start a team battle</span></button>' +
+      '<button class="mode" data-act="' + (localResume ? 'local-resume' : 'local-setup') + '">' + art('m6') + '<span class="eyebrow">2 to 6 players · one device</span><b>Pass and play</b><span class="desc">Take turns picking words for each other on one phone or laptop.</span>' + (localResume ? '<span class="state"><span class="pip"></span>Resume round ' + local.round + '</span>' : '') + '</button>' +
     '</div>' +
     '<div class="chips" role="group" aria-label="Practice category"><span class="eyebrow" style="margin-right:4px">Practice words</span>' +
       [['any', 'Mixed']].concat(CAT_KEYS.map(c => [c, CATS[c].label])).map(([v, l]) => '<button class="chip" data-act="pcat" data-v="' + v + '" aria-pressed="' + (S.practiceCat === v) + '">' + esc(l) + '</button>').join('') +
@@ -827,7 +827,7 @@ function roundResult(G, word) {
     const nextSetter = !last && G.settings.source === 'friends' && G.order.length >= 2 ? G.order[G.round % G.order.length] : null;
     if (nextSetter) next = (G.kind === 'online' && nextSetter === ME.id ? 'You pick' : esc(nameOf(G, nextSetter)) + ' picks') + ' the next word.';
   }
-  const hero = solved && G.solver ? avatarHTML(G, G.solver, 'xl celebrate') : (teams ? membersOf(G, G.pickTeam).slice(0, 3).map(id => avatarHTML(G, id, 'lg celebrate')).join('') : G.setter ? avatarHTML(G, G.setter, 'xl celebrate') : '');
+  const hero = solved && G.solver ? avatarHTML(G, G.solver, 'xl celebrate cheer') : (teams ? membersOf(G, G.pickTeam).slice(0, 3).map(id => avatarHTML(G, id, 'lg celebrate')).join('') : G.setter ? avatarHTML(G, G.setter, 'xl celebrate') : '');
   return '<div class="result">' + (hero ? '<div class="result-av">' + hero + '</div>' : '') + '<div class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + '</div><h2>' + title + '</h2>' +
     '<p class="muted">The word was <b style="color:var(--ink)">' + esc(word) + '</b>' + (G.category ? ' <span class="muted">(' + esc(catLabel(G.category)) + ')</span>' : '') + '</p>' +
     (deltas ? '<div class="deltas">' + deltas + '</div>' : '') +
@@ -848,7 +848,7 @@ function renderFinal(G) {
     title = !ids.length ? 'Game over' : winners.length > 1 ? 'A tie between ' + winners.map(id => esc(nameOf(G, id))).join(' and ') : esc(nameOf(G, winners[0])) + ' wins';
   }
   const canAgain = G.kind === 'local' || (G.kind === 'online' && G.host === ME.id);
-  const podium = ids.length >= 2 ? '<div class="podium">' + [1, 0, 2].filter(i => ids[i]).map(i => '<div class="pod p' + (i + 1) + '">' + (i === 0 ? '<img class="crown" src="/avatars/crown.png" alt="" aria-hidden="true">' : '') + avatarHTML(G, ids[i], i === 0 ? 'xl' : 'lg') + '<b>' + esc(nameOf(G, ids[i])) + '</b><span>' + (G.scores[ids[i]] || 0) + '</span><div class="pod-block">' + (i + 1) + '</div></div>').join('') + '</div>' : '';
+  const podium = ids.length >= 2 ? '<div class="podium">' + [1, 0, 2].filter(i => ids[i]).map(i => '<div class="pod p' + (i + 1) + '">' + (i === 0 ? '<img class="crown" src="/avatars/crown.png" alt="" aria-hidden="true">' : '') + avatarHTML(G, ids[i], i === 0 ? 'xl cheer' : 'lg') + '<b>' + esc(nameOf(G, ids[i])) + '</b><span>' + (G.scores[ids[i]] || 0) + '</span><div class="pod-block">' + (i + 1) + '</div></div>').join('') + '</div>' : '';
   return '<section class="final"><div class="eyebrow">Final scores · ' + G.totalRounds + ' ' + plural(G.totalRounds, 'round', 'rounds') + '</div><h1>' + title + '</h1>' + teamBlock + podium +
     '<ol class="standings">' + ids.map((id, i) => '<li class="' + (!teamsOn(G) && (G.scores[id] || 0) === top ? 'first' : '') + '"><span class="rank">' + (i + 1) + '</span>' + avatarHTML(G, id) + '<span class="nm">' + esc(nameOf(G, id)) + (teamsOn(G) && G.teams[id] ? ' <span class="muted small">' + TEAM[G.teams[id]].name + '</span>' : '') + '</span><span class="sc">' + (G.scores[id] || 0) + '</span></li>').join('') + '</ol>' +
     (G.history.length ? '<ul class="history">' + G.history.map(h => '<li>Round ' + h.round + ' · <b>' + esc(h.word) + '</b>' + (h.pickTeam && teamsOn(G) ? ' from the ' + teamName(h.pickTeam) : h.setter ? ' by ' + esc(nameOf(G, h.setter)) : '') + ' · ' + (h.result === 'solved' ? 'solved by ' + esc(nameOf(G, h.solver)) : 'nobody solved it') + '</li>').join('') + '</ul>' : '') +

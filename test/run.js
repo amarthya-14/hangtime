@@ -135,14 +135,14 @@ assert.equal(L.act(bad, { t: 'start' }, 'p1'), null, 'teams need a player each')
 console.log('TEAM TESTS PASSED');
 
 // ---------- categories, avatars, team battle ----------
-let V = (await post({ op: 'create', key: A, nick: 'Asha', avatar: 'girl1', mode: 'teams' })).j;
+let V = (await post({ op: 'create', key: A, nick: 'Asha', avatar: 'f1', mode: 'teams' })).j;
 assert.equal(V.game.settings.mode, 'teams', 'team battle starts in teams mode');
-assert.equal(V.game.avatars[V.game.me], 'girl1', 'avatar stored');
+assert.equal(V.game.avatars[V.game.me], 'f1', 'avatar stored');
 const vc = V.code;
 r = await post({ op: 'join', key: B, code: vc, nick: 'Ravi', avatar: '<img src=x>' });
 assert.equal(r.j.game.avatars[r.j.game.me], undefined, 'unknown avatars are ignored');
-r = await post({ op: 'nick', key: B, code: vc, nick: 'Ravi', avatar: 'ninja' });
-assert.equal(r.j.game.avatars[r.j.game.me], 'ninja', 'avatar can change in the lobby');
+r = await post({ op: 'nick', key: B, code: vc, nick: 'Ravi', avatar: 'm3' });
+assert.equal(r.j.game.avatars[r.j.game.me], 'm3', 'avatar can change in the lobby');
 await post({ op: 'act', key: A, code: vc, action: { t: 'start' } });
 r = await post({ op: 'act', key: A, code: vc, action: { t: 'setword', word: 'INCEPTION' } });
 assert.equal(r.j.refused, true, 'a word without a category is refused');
