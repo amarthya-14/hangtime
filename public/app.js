@@ -1,7 +1,7 @@
 import {
   AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker,
   CATS, CAT_KEYS, ALL, isLetter, normalize, hiddenCount, hash32, validateWord, pickWord,
-  wordOf, newGame, setSecret, canGuess, act
+  wordOf, newGame, setSecret, canGuess, guessersOf, act
 } from './logic.js';
 
 // ---------- helpers ----------
@@ -15,25 +15,55 @@ const store = {
 const catLabel = c => (CATS[c] && CATS[c].label) || (c ? String(c) : 'Mixed');
 const CAT_SUGGEST = ['Movie', 'Animal', 'Food', 'Place', 'Sport', 'Person', 'Thing', 'Song', 'Brand', 'Game'];
 const initials = n => (String(n || '?').trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2) || '?');
-// Quick reactions pop up as a speech bubble above the sender's avatar (3D icons: Fluent Emoji, MIT).
+// Quick reactions float up everyone's screen as a big 3D emoji with the sender's name (3D icons: Fluent Emoji, MIT).
 const QUICK = { nice: ['Nice!', 'clap'], close: ['So close!', 'shock'], gg: ['GG', 'party'], hurry: ['Hurry up!', 'hurry'], oops: ['Oops!', 'oops'], haha: ['Haha', 'laugh'], wow: ['Wow!', 'wow'], love: ['Love it', 'heart'] };
 const REACTS = Object.keys(QUICK);
-const BUBBLE_MS = 3600;
 const reactImg = k => '<img src="/reactions/' + QUICK[k][1] + '.png" alt="" draggable="false">';
-function bubbleHTML(id) {
-  const b = ON && ON.bubbles && ON.bubbles[id];
-  if (!b) return '';
-  const age = Date.now() - b.at;
-  if (age > BUBBLE_MS || !QUICK[b.k]) return '';
-  // A negative delay keeps the animation continuous when the page re-renders mid-bubble.
-  return '<span class="bubble" style="animation-delay:-' + age + 'ms">' + reactImg(b.k) + '<b>' + QUICK[b.k][0] + '</b></span>';
+function reactDock(G) {
+  if (G.kind !== 'online' || !ON) return '';
+  return '<div class="dock" role="group" aria-label="Send a reaction">' + REACTS.map(e =>
+    '<button class="dock-btn" data-act="react" data-e="' + e + '" aria-label="' + QUICK[e][0] + '">' + reactImg(e) + '<span class="dock-tip" aria-hidden="true">' + QUICK[e][0] + '</span></button>').join('') + '</div>';
 }
-function showBubble(id, k) {
-  if (!ON || !QUICK[k]) return;
-  ON.bubbles = ON.bubbles || {};
-  ON.bubbles[id] = { k, at: Date.now() };
-  SND.play('pop'); scheduleRender();
-  setTimeout(scheduleRender, BUBBLE_MS + 50);
+function flyReaction(id, k) {
+  const G = ON && ON.game;
+  if (!G || !QUICK[k]) return;
+  SND.play('pop');
+  const who = id === ME.id ? 'You' : nameOf(G, id);
+  if (reduceMotion()) { toast(who + ': ' + QUICK[k][0]); return; }
+  // Reactions rise through the empty space under the side panel, or up the right edge on a phone, never over the board.
+  const dock = [...document.querySelectorAll('.dock')].find(d => d.offsetParent);
+  const rail = dock && dock.closest('.rail');
+  let x, rise;
+  if (rail) {
+    const r = rail.getBoundingClientRect();
+    x = r.left + 60 + Math.random() * Math.max(0, r.width - 120);
+    rise = Math.max(150, innerHeight - r.bottom - 120);
+  } else {
+    x = Math.min(innerWidth - 80, innerWidth * (.66 + Math.random() * .16));
+    rise = innerHeight * .5;
+  }
+  const layer = $('#flyers');
+  const el = document.createElement('div');
+  el.className = 'fly' + (rail ? ' side' : '') + (id === ME.id ? ' mine' : '');
+  el.style.left = x + 'px';
+  el.style.setProperty('--rise', Math.round(rise) + 'px');
+  el.innerHTML = '<div class="fly-sway" style="animation-delay:-' + Math.round(Math.random() * 1600) + 'ms">' + reactImg(k) +
+    '<span class="fly-tag">' + avatarImg(avatarKeyOf(G, id)) + '<b>' + esc(who) + '</b>' + QUICK[k][0] + '</span></div>';
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 3400);
+  // A small burst of copies fans out from where the big one starts.
+  for (let i = 0; i < 6; i++) {
+    const s = document.createElement('span');
+    s.className = 'spark';
+    s.style.left = x + 'px';
+    s.style.setProperty('--dx', Math.round((Math.random() - .5) * 140) + 'px');
+    s.style.setProperty('--dy', -Math.round(Math.min(rise, 100 + Math.random() * 180)) + 'px');
+    s.style.setProperty('--r', Math.round((Math.random() - .5) * 90) + 'deg');
+    s.style.animationDelay = Math.round(Math.random() * 180) + 'ms';
+    s.innerHTML = reactImg(k);
+    layer.appendChild(s);
+    setTimeout(() => s.remove(), 2000);
+  }
 }
 const API = '/api/game';
 const TEAM = { a: { name: 'Red', color: 'var(--p2)' }, b: { name: 'Blue', color: 'var(--p1)' } };
@@ -137,12 +167,12 @@ function avatarKeyOf(G, id) {
 function avatarImg(k, pose) {
   return '<img src="/avatars/' + k + (pose === 'cheer' ? '-cheer' : '') + '.png" alt="" draggable="false" decoding="async" onerror="this.replaceWith(\'' + avatarEmoji(k) + '\')">';
 }
-function avatarHTML(G, id, cls, withBubble) {
+function avatarHTML(G, id, cls) {
   const idx = Math.max(0, G.order.indexOf(id));
   const online = G.kind === 'online' && ON && ON.online.has(id);
   const t = teamsOn(G) && G.teams && G.teams[id];
   const color = t ? TEAM[t].color : 'var(--p' + ((idx % 6) + 1) + ')';
-  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id), /\bcheer\b/.test(cls || '') ? 'cheer' : '') + (online ? '<span class="dot"></span>' : '') + (withBubble ? bubbleHTML(id) : '') + '</span>';
+  return '<span class="av av3d' + (cls ? ' ' + cls : '') + '" style="--avc:' + color + '" title="' + esc(nameOf(G, id)) + '" aria-hidden="true">' + avatarImg(avatarKeyOf(G, id), /\bcheer\b/.test(cls || '') ? 'cheer' : '') + (online ? '<span class="dot"></span>' : '') + '</span>';
 }
 function myNick() { return String(store.get('nick', '') || '').slice(0, 20); }
 function myAvatar() {
@@ -321,7 +351,7 @@ async function poll() {
     for (const x of j.rx || []) {
       ON.rxT = Math.max(ON.rxT, x.t);
       if (first) continue;
-      if (x.k === 'react') { if (x.id !== ME.id) showBubble(x.id, x.e); }
+      if (x.k === 'react') { if (x.id !== ME.id) flyReaction(x.id, x.e); }
       else if (x.k === 'nudge' && x.to === ME.id && x.id !== ME.id) { toast('Your friends are waiting on you'); SND.play('nudge'); }
     }
     if (first) ON.rxT = Math.max(ON.rxT, j.now || 0);
@@ -686,13 +716,14 @@ function boardShell(o) {
   return '<section class="board' + (o.rail ? ' has-rail' : '') + '"><div class="play">' +
     '<div class="roundline">' + o.eyebrow + '</div>' +
     (teamsOn(G) && G.pickTeam ? vsBanner(G) : '') +
-    '<div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureHTML(G, o.key) + '</div></div>' +
-    livesHTML(G) +
+    // On wide screens the arena puts the hangman beside the word and keyboard, so a laptop sees the whole board at once.
+    '<div class="arena"><div class="arena-fig"><div class="stage"><div class="figure' + (won ? ' won' : '') + (lost ? ' lost' : '') + '">' + figureHTML(G, o.key) + '</div></div>' +
+    livesHTML(G) + '</div><div class="arena-main">' +
     (o.clue ? '<div class="clue">' + o.clue + '</div>' : '') +
     (t ? '<div class="tiles' + (shake ? ' shake' : '') + (won ? ' win' : '') + '" role="img" aria-label="' + esc(t.aria) + '">' + t.html + '</div>' : '') +
-    '<div class="status" aria-live="polite">' + (o.status || '') + '</div>' +
+    '<div class="status-row">' + (G.status === 'playing' ? timerHTML(G) : '') + '<div class="status" aria-live="polite">' + (o.status || '') + '</div></div>' +
     (G.wrongWords.length ? '<div class="tried">Wrong answers: ' + G.wrongWords.map(w => '<s>' + esc(w) + '</s>').join(' ') + '</div>' : '') +
-    (o.below || '') +
+    (o.below || '') + reactDock(G) + '</div></div>' +
   '</div>' + (o.rail ? '<aside class="rail">' + o.rail + '</aside>' : '') + '</section>';
 }
 function miniStats() {
@@ -737,7 +768,7 @@ function timerHTML(G) {
   return '<span class="timer" data-deadline="' + G.deadline + '" role="timer" aria-label="Time left"><svg viewBox="0 0 36 36"><circle class="tr-bg" cx="18" cy="18" r="15.5"/><circle class="tr-fg" cx="18" cy="18" r="15.5" pathLength="100"/></svg><b>' + Math.max(0, Math.ceil((G.deadline - serverNow()) / 1000)) + '</b></span>';
 }
 function roundEyebrow(G) {
-  return timerHTML(G) + '<span class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + (teamsOn(G) && G.pickTeam ? ' \u00b7 ' + TEAM[G.pickTeam].name + ' picks, ' + TEAM[otherTeam(G.pickTeam)].name + ' guesses' : '') + '</span>' + (G.kind === 'online' ? '<span class="code-chip">' + esc(G.code) + '</span>' : '');
+  return (G.status === 'playing' ? '' : timerHTML(G)) + '<span class="eyebrow">Round ' + G.round + ' of ' + G.totalRounds + (teamsOn(G) && G.pickTeam ? ' \u00b7 ' + TEAM[G.pickTeam].name + ' picks, ' + TEAM[otherTeam(G.pickTeam)].name + ' guesses' : '') + '</span>' + (G.kind === 'online' ? '<span class="code-chip">' + esc(G.code) + '</span>' : '');
 }
 function playersHTML(G, lobby, list) {
   const ids = list || (lobby ? G.order : G.order.slice().sort((a, b) => (G.scores[b] || 0) - (G.scores[a] || 0)));
@@ -752,27 +783,10 @@ function playersHTML(G, lobby, list) {
     if (turn) tags.push('Guessing now');
     if (off) tags.push('Away');
     const isMe = G.kind === 'online' && id === ME.id;
-    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '" data-id="' + esc(id) + '">' + avatarHTML(G, id, turn ? 'bob' : '', true) +
+    return '<li class="pl' + (turn ? ' turn' : '') + (off ? ' off' : '') + '" data-id="' + esc(id) + '">' + avatarHTML(G, id, turn ? 'bob' : '') +
       '<div class="who"><div class="nm">' + esc(nameOf(G, id)) + (isMe ? '<span class="you">you</span>' : '') + '</div>' + (tags.length ? '<div class="tag">' + tags.join(' · ') + '</div>' : '') + '</div>' +
       (lobby ? '' : '<div class="sc">' + (G.scores[id] || 0) + '</div>') + '</li>';
   }).join('') + '</ul>';
-}
-function feedLine(G, e) {
-  const n = '<b>' + esc(nameOf(G, e.by)) + '</b>';
-  switch (e.k) {
-    case 'hit': return n + ' found ' + (e.n > 1 ? e.n + ' \u00d7 ' : '') + esc(e.c) + (e.p ? ' <span class="pts">+' + Number(e.p) + '</span>' : '');
-    case 'miss': return n + ' tried ' + esc(e.c) + ', not in the word';
-    case 'solved': return n + ' solved it (+' + Number(e.p || 0) + ')';
-    case 'wrong': return n + ' guessed “' + esc(e.w) + '”, wrong';
-    case 'set': return teamsOn(G) && G.teams[e.by] ? n + ' locked in the ' + esc(teamName(G.teams[e.by])) + '’s word' : n + ' picked a word';
-    case 'random': return 'A random word was drawn';
-    case 'skip': return '<b>' + esc(nameOf(G, e.who)) + '</b>’s turn was skipped';
-    case 'timeup': return e.setting ? 'Time ran out, so a random word was drawn' : e.who ? '<b>' + esc(nameOf(G, e.who)) + '</b> ran out of time' : 'Time ran out, one life lost';
-    case 'join': return n + ' joined';
-    case 'leave': return n + ' left the game';
-    case 'hanged': return 'Out of lives';
-    default: return '';
-  }
 }
 function vsBanner(G, compact) {
   const live = G.pickTeam && !['done', 'lobby'].includes(G.status);
@@ -782,7 +796,7 @@ function vsBanner(G, compact) {
     const role = live ? (G.pickTeam === t ? 'Giving the word' : 'Guessing') : (G.status === 'done' && ts[t] > ts[otherTeam(t)] ? 'Winners' : '');
     return '<div class="vs-side t-' + t + (live && G.pickTeam === t ? ' giving' : '') + (live && G.pickTeam !== t ? ' guessing' : '') + '">' +
       '<div class="vs-head"><span class="vs-name">' + TEAM[t].name + '</span>' + (role ? '<span class="vs-role">' + role + '</span>' : '') + '</div>' +
-      '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id, '', true)).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
+      '<div class="vs-body"><div class="vs-avs">' + m.slice(0, 5).map(id => avatarHTML(G, id, '')).join('') + (m.length > 5 ? '<span class="av av-more">+' + (m.length - 5) + '</span>' : '') + '</div>' +
       '<b class="vs-score" data-k="' + esc(gameKeyBase(G) + t) + '" data-to="' + (ts[t] || 0) + '">' + (fx.score[gameKeyBase(G) + t] != null ? fx.score[gameKeyBase(G) + t] : (ts[t] || 0)) + '</b></div></div>';
   };
   return '<div class="vs' + (compact ? ' compact' : '') + '" role="group" aria-label="Red ' + (ts.a || 0) + ', Blue ' + (ts.b || 0) + '">' + side('a') + '<div class="vs-mid" aria-hidden="true">VS</div>' + side('b') + '</div>';
@@ -799,12 +813,8 @@ function chatHTML(G) {
     '<form class="chatform" data-form="chat"><input id="chat-input" class="field" maxlength="200" autocomplete="off" placeholder="Message your ' + (myTeam ? 'team' : 'friends') + '" aria-label="Chat message"><button class="btn" type="submit">Send</button></form></div>';
 }
 function railHTML(G) {
-  const items = G.log.slice(-8).reverse().map(e => feedLine(G, e)).filter(Boolean);
-  const reacts = G.kind === 'online';
   return chatHTML(G) +
-    '<div class="card"><div class="card-h"><span class="eyebrow">' + (teamsOn(G) ? 'Players' : 'Scores') + '</span></div>' + playersHTML(G) + '</div>' +
-    (reacts ? '<div class="card"><span class="eyebrow">Quick reactions</span><div class="reacts">' + REACTS.map(e => '<button class="react" data-act="react" data-e="' + e + '">' + reactImg(e) + '<span>' + QUICK[e][0] + '</span></button>').join('') + '</div></div>' : '') +
-    '<div class="card"><div class="card-h"><span class="eyebrow">Activity</span></div>' + (items.length ? '<ul class="feed">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '<p class="muted small" style="margin:0">Moves show up here.</p>') + '</div>';
+    '<div class="card"><div class="card-h"><span class="eyebrow">' + (teamsOn(G) ? 'Players' : 'Scores') + '</span></div>' + playersHTML(G) + '</div>' + reactDock(G);
 }
 function roundResult(G, word) {
   const solved = G.result === 'solved';
@@ -925,7 +935,7 @@ function renderOnline() {
   if (G.status === 'setting') {
     if (picker) {
       const form = teams ? setWordForm(false, 'Pick a word for the ' + teamName(otherTeam(G.pickTeam)), 'Agree on it in your team chat. Anyone on your team can lock it in.') : setWordForm(false);
-      return '<section class="board has-rail"><div class="play"><div class="roundline">' + roundEyebrow(G) + '</div>' + (teams ? vsBanner(G) : '') + '<div class="setword">' + form + '</div></div><aside class="rail">' + railHTML(G) + '</aside></section>';
+      return '<section class="board has-rail"><div class="play"><div class="roundline">' + roundEyebrow(G) + '</div>' + (teams ? vsBanner(G) : '') + '<div class="setword">' + form + '</div>' + reactDock(G) + '</div><aside class="rail">' + railHTML(G) + '</aside></section>';
     }
     const who = teams ? 'The ' + teamName(G.pickTeam) + ' is' : esc(nameOf(G, G.setter)) + ' is';
     const pickers = teams ? membersOf(G, G.pickTeam) : [G.setter];
@@ -1075,7 +1085,7 @@ document.addEventListener('click', e => {
     case 'react': {
       if (!ON || Date.now() - lastReact < 1200) break;
       lastReact = Date.now();
-      const em = el.dataset.e; showBubble(ME.id, em);
+      const em = el.dataset.e; flyReaction(ME.id, em);
       api('react', { code: ON.code, e: em }).catch(() => {});
       break;
     }
