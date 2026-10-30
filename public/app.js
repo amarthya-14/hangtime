@@ -913,7 +913,7 @@ function renderLobby(G) {
       '<div style="margin-top:12px"><label class="lbl" for="nick-lobby">Your name in this game</label><div class="row"><input id="nick-lobby" class="field" maxlength="20" value="' + esc((G.nicks && G.nicks[ME.id]) || myNick()) + '" placeholder="Your name"><button class="btn" data-act="save-nick">Save</button></div>' +
       '<span class="lbl" style="margin-top:10px">Your avatar</span>' + avatarPicker(avatarKeyOf(G, ME.id), 'lobby-avatar') + '</div></div>' +
     '<div class="panel span"><h2>Settings</h2>' + (isHost ? '' : '<p class="muted small" style="margin:0">Only ' + esc(nameOf(G, G.host)) + ' can change these.</p>') + settingsHTML('setting', G.settings, isHost, false) +
-      '<p class="rules">' + (teamsOn(G) ? 'Teams swap every round: one team agrees on a word and its category in its private chat, the other team guesses it.' : 'Everyone takes a turn giving the word. The turn passes after every guess.') + ' Every word is worth the same, short or long: up to 100 points, plus 5 for each life left.</p></div>' +
+      '<p class="rules">' + (teamsOn(G) ? 'Teams swap every round: one team agrees on a word and its category in its private chat, the other team guesses it.' : 'Everyone takes a turn giving the word. Guess a right letter and you go again; miss and the turn passes on.') + ' Every word is worth the same, short or long: up to 100 points, plus 5 for each life left.</p></div>' +
     '<div class="span">' + chatHTML(G) + '</div>' +
     '<div class="span start-row">' + (isHost
       ? '<button class="btn primary big" data-act="start"' + (teamsBad ? ' disabled' : '') + '>Start game</button>' + (teamsBad ? '<span class="muted small">Each team needs at least one player.</span>' : G.order.length < 2 && G.settings.source === 'friends' ? '<span class="muted small">With one player the words are random until a friend joins.</span>' : '')
@@ -971,7 +971,7 @@ function renderModal() {
       '<li>Solve the whole word whenever you think you know it. A wrong answer costs a life, the same as a wrong letter.</li>' +
       '<li>The daily word is the same for everyone and changes at midnight. Share your result to compare with friends.</li>' +
       '<li>Every word is worth the same, short or long. Letters you uncover share 60 points. Finishing the word earns 40 more, plus 5 for each life left. If nobody solves it, whoever gave the word earns 50.</li>' +
-      '<li>The turn passes after every guess, so everyone plays every round. Each player (or each team) takes a turn giving the word.</li>' +
+      '<li>Guess a right letter and you go again; miss and the turn passes to the next player. Each player (or each team) takes a turn giving the word.</li>' +
       '<li>With the timer on, you have 60 seconds to guess and 60 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn.</li>' +
       '<li>Team battle: Red vs Blue. One team agrees on a word and its category in its private chat, the other team guesses, then they swap. Team points decide the winner.</li>' +
       '<li>On a computer you can type letters on your keyboard.</li></ul>';

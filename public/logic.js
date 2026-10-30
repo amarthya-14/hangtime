@@ -195,8 +195,8 @@ function act(G0, a, by, rnd) {
         G.misses++; logIt(G, { k: 'miss', by, c });
         if (G.misses >= G.settings.maxMisses) { endRound(G, 'hanged', null, word); return G; }
       }
-      // The turn passes after every guess, so everyone gets to play each round.
-      if (G.settings.turns) G.turn = nextTurn(G, by);
+      // A right letter keeps the turn; a miss passes it on.
+      if (G.settings.turns && !n) G.turn = nextTurn(G, by);
       setDeadline(G);
       return G;
     }

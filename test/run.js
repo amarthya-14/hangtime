@@ -33,7 +33,7 @@ r = await post({ op: 'act', key: C, code, action: { t: 'guess', letter: 'P' } })
 assert.equal(r.j.refused, true);
 r = await post({ op: 'act', key: B, code, action: { t: 'guess', letter: 'P' } });
 assert.equal(r.j.game.shown, 'P?? ???P'); assert.equal(r.j.game.scores[idB], 17, '2 of 7 letters = 17 of the 60-point pool');
-assert.notEqual(r.j.game.turn, idB, 'the turn passes after a hit too');
+assert.equal(r.j.game.turn, idB, 'a right letter keeps the turn');
 // unchanged version returns no game payload
 const v = r.j.game.version;
 r = await get({ code, key: B, v, hb: 1 });
@@ -110,10 +110,10 @@ assert.equal((await post({ op: 'act', key: A, code: tc, action: { t: 'guess', le
 const firstKey = bv.turn === ids[C] ? C : D, secondKey = firstKey === C ? D : C;
 r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'guess', letter: 'O' } });
 assert.equal(r.j.game.teamScores.b, 12, '1 of 5 letters = 12');
-assert.equal(r.j.game.turn, ids[secondKey], 'turn passes within blue after a hit');
-r = await post({ op: 'act', key: secondKey, code: tc, action: { t: 'guess', letter: 'X' } });
-assert.equal(r.j.game.turn, ids[firstKey], 'and after a miss');
-r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'solve', word: 'monza' } });
+assert.equal(r.j.game.turn, ids[firstKey], 'a right letter keeps the turn');
+r = await post({ op: 'act', key: firstKey, code: tc, action: { t: 'guess', letter: 'X' } });
+assert.equal(r.j.game.turn, ids[secondKey], 'a miss passes it within blue');
+r = await post({ op: 'act', key: secondKey, code: tc, action: { t: 'solve', word: 'monza' } });
 assert.equal(r.j.game.status, 'over'); assert.equal(r.j.game.teamScores.b, 12 + 48 + 40 + 5 * 5, 'rest of the pool + solve bonus + 5 per life left');
 r = await post({ op: 'act', key: A, code: tc, action: { t: 'next', round: 1 } });
 assert.equal(r.j.game.pickTeam, 'b', 'teams swap');
