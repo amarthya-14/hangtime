@@ -100,8 +100,13 @@ function letterSlots(w) { return [...w].filter(isLetter).length || 1; }
 function revealedSlots(w, g) { return [...w].filter(ch => isLetter(ch) && g.includes(ch)).length; }
 function poolShare(w, k) { return Math.round(LETTER_POOL * k / letterSlots(w)); }
 function finishBonus(G) { return SOLVE_BONUS + LIFE_BONUS * Math.max(0, G.settings.maxMisses - G.misses); }
-// Optional turn timer: 60 seconds to guess (per turn) and to give the word.
-function setDeadline(G) { G.deadline = G.settings.timer && (G.status === 'setting' || G.status === 'playing') ? Date.now() + G.settings.timer * 1000 : 0; }
+// Optional turn timer: 60 seconds to guess (per turn) and 120 to give the word.
+const PICK_SECS = 120;
+function timerSecs(G) { return !G.settings.timer ? 0 : G.status === 'setting' ? PICK_SECS : G.status === 'playing' ? G.settings.timer : 0; }
+function setDeadline(G) { const s = timerSecs(G); G.deadline = s ? Date.now() + s * 1000 : 0; }
+// Rounds are counted per word-giver (each player, or each team), so everyone gives the same number of words.
+// With random words nobody gives them, so it is just the number of words.
+function roundsEach(s) { return Number(s.rounds) || (s.mode === 'teams' ? 2 : s.source === 'friends' ? 1 : 5); }
 function addTeamPts(G, t, p) { if (!t) return; G.teamScores[t] = (G.teamScores[t] || 0) + p; G.roundTeamPts[t] = (G.roundTeamPts[t] || 0) + p; }
 function addPts(G, id, p) {
   if (!id) return;
@@ -157,7 +162,7 @@ function endRound(G, result, solver, w) {
     logIt(G, { k: 'hanged' });
   }
   G.history.push({ round: G.round, word: w, setter: G.setter, result, solver: solver || null, misses: G.misses, pickTeam: G.pickTeam });
-  if (G.history.length > 20) G.history = G.history.slice(-20);
+  if (G.history.length > 40) G.history = G.history.slice(-40);
 }
 function canGuess(G, by) {
   if (G.status !== 'playing' || !by || !guessersOf(G).includes(by)) return false;
@@ -168,7 +173,8 @@ function startGame(G, rnd) {
     for (const id of G.order) if (!TEAM_IDS.includes(G.teams[id])) G.teams[id] = smallerTeam(G);
     if (!membersOf(G, 'a').length || !membersOf(G, 'b').length) return false;
   }
-  G.totalRounds = Number(G.settings.rounds) || (teamsOn(G) ? 4 : G.settings.source === 'friends' && G.order.length >= 2 ? G.order.length : 5);
+  const givers = teamsOn(G) ? 2 : G.settings.source === 'friends' && G.order.length >= 2 ? G.order.length : 1;
+  G.totalRounds = roundsEach(G.settings) * givers;
   G.round = 1; G.scores = Object.fromEntries(G.order.map(id => [id, 0])); G.history = [];
   G.teamScores = { a: 0, b: 0 };
   beginRound(G, rnd);
@@ -258,7 +264,7 @@ function act(G0, a, by, rnd) {
       if (s.category === 'any' || CATS[s.category]) G.settings.category = s.category;
       if (typeof s.turns === 'boolean') G.settings.turns = s.turns;
       if ([6, 8, 10].includes(s.maxMisses)) G.settings.maxMisses = s.maxMisses;
-      if ([0, 3, 5, 8].includes(s.rounds)) G.settings.rounds = s.rounds;
+      if ([0, 1, 2, 3, 5, 8].includes(s.rounds)) G.settings.rounds = s.rounds;
       if ([0, 60].includes(s.timer)) G.settings.timer = s.timer;
       return G;
     }
@@ -320,4 +326,4 @@ function act(G0, a, by, rnd) {
   return null;
 }
 
-export { LETTER_POOL, SOLVE_BONUS, LIFE_BONUS, SURVIVE_BONUS, AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };
+export { LETTER_POOL, SOLVE_BONUS, LIFE_BONUS, SURVIVE_BONUS, AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker, CATS, CAT_KEYS, ALL, DEFAULTS, roundsEach, timerSecs, isLetter, normalize, lettersOf, isSolved, hiddenCount, hash32, enc, dec, validateWord, pickWord, saltOf, wordOf, newGame, guessersOf, nextTurn, logIt, setSecret, canGuess, act };

@@ -4,7 +4,7 @@ Hangman you can play with friends. Live at **https://hangtime-rouge.vercel.app**
 
 - **Daily word**: the same word for everyone each day, with a shareable result grid.
 - **Practice**: endless words from eight kid-friendly categories, with streaks and stats.
-- **Optional timer**: 60 seconds to guess and 60 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn. The server keeps the clock.
+- **Optional timer**: 60 seconds to guess and 120 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn. The server keeps the clock.
 - **3D hangman**: a blocky wooden gallows that grows one piece per wrong guess, with the guesser's own avatar standing on a crate. Run out of lives and the crate tips over; solve it and they jump for joy.
 - **Fair scoring**: every word is worth the same, short or long. Uncovered letters share 60 points, finishing the word earns 40 more plus 5 per life left, and a word nobody solves earns 50 for whoever gave it. Guess a right letter and you go again; miss and the turn passes on.
 - **Pass and play**: 2 to 6 players on one device take turns picking words for each other.

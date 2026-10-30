@@ -1,7 +1,7 @@
 import {
   AVATARS, AVATAR_KEYS, cleanLabel, TEAM_IDS, teamsOn, otherTeam, membersOf, isPicker,
   CATS, CAT_KEYS, ALL, isLetter, normalize, hiddenCount, hash32, validateWord, pickWord,
-  wordOf, newGame, setSecret, canGuess, guessersOf, act
+  wordOf, newGame, setSecret, canGuess, guessersOf, roundsEach, timerSecs, act
 } from './logic.js';
 
 // ---------- helpers ----------
@@ -309,7 +309,7 @@ function tickTimers() {
       const mine = G && ((G.status === 'playing' && G.turn && (G.turn === ME.id || S.view !== 'online')) || (G.status === 'setting' && (S.view !== 'online' || isPicker(G, ME.id))));
       if (secs > 0 && secs <= 5 && mine) SND.play('tick');
     }
-    const total = ((G && G.settings.timer) || 60) * 1000;
+    const total = ((G && timerSecs(G)) || 60) * 1000;
     el.style.setProperty('--p', Math.max(0, Math.min(1, left / total)));
     el.classList.toggle('low', secs <= 10);
     if (left <= 0 && G && G.deadline === dl) {
@@ -604,8 +604,8 @@ function settingsHTML(act, s, enabled, local) {
     (s.source === 'random' ? '<div class="setting"><span class="lbl">Category</span>' + seg(act, 'category', s.category, cats, enabled) + '</div>' : '') +
     (local ? '' : '<div class="setting"><span class="lbl">Guessing</span>' + seg(act, 'turns', s.turns, [[true, 'One at a time'], [false, 'Everyone at once']], enabled) + '</div>') +
     '<div class="setting"><span class="lbl">Lives per word</span>' + seg(act, 'maxMisses', s.maxMisses, [[6, '6 classic'], [8, '8'], [10, '10 relaxed']], enabled) + '</div>' +
-    '<div class="setting"><span class="lbl">Timer</span>' + seg(act, 'timer', s.timer || 0, [[0, 'Off'], [60, '60 seconds to guess or give a word']], enabled) + '</div>' +
-    '<div class="setting"><span class="lbl">Rounds</span>' + seg(act, 'rounds', s.rounds, [[0, teams ? '4' : s.source === 'friends' ? 'One each' : '5'], [3, '3'], [5, '5'], [8, '8']].filter((x, i) => !(i === 2 && (teams || s.source !== 'friends'))), enabled) + '</div>' +
+    '<div class="setting"><span class="lbl">Timer</span>' + seg(act, 'timer', s.timer || 0, [[0, 'Off'], [60, '60 s to guess, 120 s to give a word']], enabled) + '</div>' +
+    '<div class="setting"><span class="lbl">Rounds</span>' + seg(act, 'rounds', roundsEach(s), teams || s.source === 'friends' ? [1, 2, 3, 5].map(n => [n, n + ' each']) : [[3, '3 words'], [5, '5 words'], [8, '8 words']], enabled) + '</div>' +
   '</div>';
 }
 function localAvatar(i) { const a = (S.setup.avatars || [])[i]; return AVATAR_KEYS.includes(a) ? a : AVATAR_KEYS[(i * 5) % AVATAR_KEYS.length]; }
@@ -972,7 +972,7 @@ function renderModal() {
       '<li>The daily word is the same for everyone and changes at midnight. Share your result to compare with friends.</li>' +
       '<li>Every word is worth the same, short or long. Letters you uncover share 60 points. Finishing the word earns 40 more, plus 5 for each life left. If nobody solves it, whoever gave the word earns 50.</li>' +
       '<li>Guess a right letter and you go again; miss and the turn passes to the next player. Each player (or each team) takes a turn giving the word.</li>' +
-      '<li>With the timer on, you have 60 seconds to guess and 60 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn.</li>' +
+      '<li>With the timer on, you have 60 seconds to guess and 120 seconds to give a word. Run out while guessing and the turn passes on; run out while giving a word and a random word is drawn.</li>' +
       '<li>Team battle: Red vs Blue. One team agrees on a word and its category in its private chat, the other team guesses, then they swap. Team points decide the winner.</li>' +
       '<li>On a computer you can type letters on your keyboard.</li></ul>';
   } else if (S.modal === 'stats') {

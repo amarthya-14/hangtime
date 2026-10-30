@@ -169,17 +169,30 @@ R3 = L.act(R3, { t: 'start' }, 'a');
 const setters = [];
 for (let r = 1; r <= 3; r++) { setters.push(R3.setter); R3 = L.act(R3, { t: 'setword', word: 'CAKE', category: 'Food' }, R3.setter); R3 = L.act(R3, { t: 'solve', word: 'cake' }, R3.turn); R3 = L.act(R3, { t: 'next', round: r }, 'a'); }
 assert.deepEqual(setters, ['a', 'b', 'c'], 'with 3 players everyone gives a word once');
+assert.equal(R3.status, 'done', 'and the default game ends there');
+let R6 = L.newGame('local', { host: 'a', order: ['a', 'b', 'c'], settings: { source: 'friends', rounds: 2 } });
+R6 = L.act(R6, { t: 'start' }, 'a');
+assert.equal(R6.totalRounds, 6, '2 rounds with 3 players means 2 words each');
+const setters6 = [];
+for (let r = 1; r <= 6; r++) { setters6.push(R6.setter); R6 = L.act(R6, { t: 'setword', word: 'CAKE', category: 'Food' }, R6.setter); R6 = L.act(R6, { t: 'solve', word: 'cake' }, R6.turn); R6 = L.act(R6, { t: 'next', round: r }, 'a'); }
+assert.deepEqual(setters6, ['a', 'b', 'c', 'a', 'b', 'c']); assert.equal(R6.status, 'done');
+const TR = L.act(L.newGame('local', { host: 'a', order: ['a', 'b', 'c', 'd'], settings: { mode: 'teams', source: 'friends', rounds: 3 } }), { t: 'start' }, 'a');
+assert.equal(TR.totalRounds, 6, '3 rounds in a team battle means 3 words from each team');
+const RR = L.act(L.newGame('local', { host: 'a', order: ['a', 'b', 'c'], settings: { source: 'random', rounds: 3 } }), { t: 'start' }, 'a');
+assert.equal(RR.totalRounds, 3, 'with random words, rounds are just the number of words');
 console.log('FAIRNESS TESTS PASSED');
 
-// ---------- optional 60-second timer ----------
+// ---------- optional timer: 120 seconds to give a word, 60 to guess ----------
 const realNow = Date.now;
 let clock = realNow();
 Date.now = () => clock;
 let T6 = L.newGame('local', { host: 'a', order: ['a', 'b', 'c'], settings: { source: 'friends', timer: 60 } });
 T6 = L.act(T6, { t: 'start' }, 'a');
-assert.equal(T6.status, 'setting'); assert.equal(T6.deadline, clock + 60000, 'giving the word gets 60 seconds');
+assert.equal(T6.status, 'setting'); assert.equal(T6.deadline, clock + 120000, 'giving the word gets 120 seconds');
 assert.equal(L.act(T6, { t: 'timeout', deadline: T6.deadline }, 'b'), null, 'no time-out before the clock runs out');
 clock += 61000;
+assert.equal(L.act(T6, { t: 'timeout', deadline: T6.deadline }, 'b'), null, 'still time left after 61 seconds');
+clock += 60000;
 let T7 = L.act(T6, { t: 'timeout', deadline: T6.deadline }, 'b');
 assert.equal(T7.status, 'playing', 'a slow word-giver gets a random word'); assert.ok(L.wordOf(T7).length > 2);
 assert.equal(T7.deadline, clock + 60000, 'guessing starts a fresh 60 seconds');
